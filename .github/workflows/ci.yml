@@ -14,113 +14,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deps:
-    name: Dependencies
-    runs-on: ubuntu-latest
+  checks:
+    name: Checks
+    runs-on: ubuntu-24.04
     container:
-      image: alpine:3.24
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Install OS Deps
-        run: |
-          apk update && apk add --update tar build-base g++ git make cmake ninja libsodium-dev \
-            elixir erlang-dialyzer
-
-      - name: Retrieve Cached Dependencies
-        uses: actions/cache@v5
-        id: mix-cache
-        with:
-          path: |
-            deps
-            _build
-            priv/plts
-          key: ${{ runner.os }}-memovee-${{ hashFiles('mix.lock') }}
-
-      - name: Install Dependencies
-        if: steps.mix-cache.outputs.cache-hit != 'true'
-        env:
-          MIX_ENV: test
-        run: |
-          mkdir -p priv/plts
-          mix local.rebar --force
-          mix local.hex --force
-          mix deps.get
-          mix deps.compile
-          mix dialyzer --plt
-
-  static_code_analysis:
-    name: Static Code Analysis
-    needs: deps
-    runs-on: ubuntu-latest
-    container:
-      image: alpine:3.24
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Install Dependencies
-        env:
-          MIX_ENV: test
-        run: |
-          apk update && apk add --update tar build-base g++ git make cmake ninja libsodium-dev \
-            elixir erlang-dialyzer
-          mix local.rebar --force
-          mix local.hex --force
-
-      - name: Retrieve Cached Dependencies
-        uses: actions/cache@v5
-        id: mix-cache
-        with:
-          path: |
-            deps
-            _build
-            priv/plts
-          key: ${{ runner.os }}-memovee-${{ hashFiles('mix.lock') }}
-
-      - name: Check Code Format
-        env:
-          MIX_ENV: test
-        run: |
-          mix format --check-formatted
-
-      - name: Run Credo
-        env:
-          MIX_ENV: test
-        run: |
-          mix credo --strict
-
-      - name: Run Dialyzer
-        env:
-          MIX_ENV: test
-        run: |
-          mix dialyzer --no-check --halt-exit-status
-
-  test:
-    name: Unit Tests
-    needs: deps
-    runs-on: ubuntu-latest
-    container:
-      image: alpine:3.24
-
+      image: elixir:1.20.3-otp-29
+    env:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      MIX_ENV: test
     services:
       postgres:
-        image: postgres:16
+        image: postgres:16-alpine
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: postgres
-        ports:
-          - 5432:5432
-        # needed because the postgres container does not provide a healthcheck
-        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - name: Checkout
@@ -128,37 +42,39 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install Dependencies
-        env:
-          MIX_ENV: test
+      - name: Install CI Tools
         run: |
-          apk update && apk add --update tar build-base g++ git make cmake ninja libsodium-dev \
-            elixir erlang-dialyzer
-          mix local.rebar --force
+          apt-get update
+          apt-get install --yes --no-install-recommends zstd
           mix local.hex --force
+          mix local.rebar --force
 
       - name: Retrieve Cached Dependencies
         uses: actions/cache@v5
-        id: mix-cache
         with:
           path: |
             deps
             _build
             priv/plts
-          key: ${{ runner.os }}-memovee-${{ hashFiles('mix.lock') }}
+          key: ${{ runner.os }}-debian-elixir-image-test-${{ hashFiles('mise.toml') }}-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-debian-elixir-image-test-${{ hashFiles('mise.toml') }}-
 
       - name: Install Dependencies
-        if: steps.mix-cache.outputs.cache-hit != 'true'
-        env:
-          MIX_ENV: test
         run: |
           mkdir -p priv/plts
           mix deps.get
-          mix deps.compile
+          mix compile --warnings-as-errors
           mix dialyzer --plt
 
+      - name: Check Code Format
+        run: mix format --check-formatted
+
+      - name: Run Credo
+        run: mix credo --strict
+
+      - name: Run Dialyzer
+        run: mix dialyzer --no-check
+
       - name: Run Tests
-        env:
-          MIX_ENV: test
-        run: |
-          mix test --trace --slowest 10
+        run: mix test --trace --slowest 10

@@ -1,4 +1,4 @@
 [tools]
 erlang = "29.0.5"
-elixir = "1.20.3"
-postgres = "16.9"
+elixir = "1.20.3-otp-29"
+postgres = "16.15"
