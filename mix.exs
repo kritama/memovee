@@ -10,8 +10,17 @@ defmodule Memovee.MixProject do
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
+      dialyzer: dialyzer(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
       listeners: [Phoenix.CodeReloader]
+    ]
+  end
+
+  defp dialyzer do
+    [
+      plt_core_path: "priv/plts",
+      plt_add_apps: [:ex_unit, :mix],
+      plt_file: {:no_warn, "priv/plts/dialyzer.plt"}
     ]
   end
 
@@ -43,6 +52,7 @@ defmodule Memovee.MixProject do
       {:phoenix, "~> 1.8.12"},
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.14"},
+      {:eventful, "~> 3.3"},
       {:postgrex, ">= 0.0.0"},
       {:phoenix_html, "~> 4.1"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
@@ -72,7 +82,9 @@ defmodule Memovee.MixProject do
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
-      {:bandit, "~> 1.5"}
+      {:bandit, "~> 1.5"},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
   end
 
@@ -95,7 +107,13 @@ defmodule Memovee.MixProject do
         "esbuild memovee --minify",
         "phx.digest"
       ],
-      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
+      precommit: [
+        "compile --warnings-as-errors",
+        "deps.unlock --unused",
+        "format",
+        "credo --strict",
+        "test"
+      ]
     ]
   end
 end

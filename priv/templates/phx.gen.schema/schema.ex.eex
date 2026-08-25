@@ -4,8 +4,6 @@ defmodule <%= inspect schema.module %> do
 <%= if schema.prefix do %>
   @schema_prefix :<%= schema.prefix %><% end %><%= if schema.opts[:primary_key] do %>
   @derive {Phoenix.Param, key: :<%= schema.opts[:primary_key] %>}<% end %>
-  @primary_key {:<%= primary_key %>, Ecto.UUID, autogenerate: [version: 7, precision: :monotonic]}
-  @foreign_key_type Ecto.UUID
   schema <%= inspect schema.table %> do
 <%= Mix.Phoenix.Schema.format_fields_for_schema(schema) %>
 <%= for {_, k, _, _} <- schema.assocs do %>    field <%= inspect k %>, Ecto.UUID

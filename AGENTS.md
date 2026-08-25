@@ -131,7 +131,10 @@ custom classes must fully style the input
 - You **must** use `Ecto.Changeset.get_field(changeset, :field)` to access changeset fields
 - Fields which are set programmatically, such as `user_id`, must not be listed in `cast` calls or similar for security purposes. Instead they must be explicitly set when creating the struct
 - **Always** invoke `mix ecto.gen.migration migration_name_using_underscores` when generating migration files, so the correct timestamp and conventions are applied
-- **All Ecto schemas must `use Memovee.Schema`** (never `use Ecto.Schema` directly). It standardizes the primary key on strictly monotonic UUIDv7 (`Ecto.UUID` with `autogenerate: [version: 7, precision: :monotonic]`) and all foreign keys on `Ecto.UUID`, which maps to PostgreSQL `uuid` columns (`:binary_id` in migrations). Never declare integer (`:id`/`:bigserial`) or random v4 UUID primary keys
+- **All ordinary Ecto schemas must `use Memovee.Schema`** (never `use Ecto.Schema` directly). It standardizes the primary key on strictly monotonic UUIDv7 (`Ecto.UUID` with `autogenerate: [version: 7, precision: :monotonic]`) and all foreign keys on `Ecto.UUID`, which maps to PostgreSQL `uuid` columns (`:binary_id` in migrations). Never declare integer (`:id`/`:bigserial`) or random v4 UUID primary keys
+- Follow Tama's per-schema manager convention: keep schemas focused on fields, associations, changesets, and pure data behavior; place Repo queries, persistence, transactions, and resource orchestration in the adjacent `Schema.Manager`; expose selected operations from aggregate contexts with `defdelegate`
+- Eventful owns its generated Event schema, so configure every `use Eventful` with `binary_id: Memovee.Eventful.UUIDv7`; never use `binary_id: true`, which falls back to UUIDv4. Eventful transitions must have an Accounts Actor and must be invoked through `Eventful.Transit.perform/4`, never by casting lifecycle fields directly
+- Keep Eventful `Transitions` modules focused on transition declarations. Delegate substantive validation, querying, and custom transaction helpers to the resource's `Manager` module
 <!-- phoenix:ecto-end -->
 
 <!-- phoenix:html-start -->

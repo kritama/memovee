@@ -1,4 +1,6 @@
 defmodule Memovee.TestArticle do
+  @moduledoc false
+
   use Memovee.Schema
 
   schema "test_articles" do

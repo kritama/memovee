@@ -10,6 +10,12 @@
 # Where 3rd-party dependencies like ExDoc output generated docs.
 /doc/
 
+# Dialyzer lookup tables are local to the Erlang and Elixir toolchain.
+/priv/plts/
+
+# ElixirLS stores local builds and analysis caches here.
+/.elixir_ls/
+
 # Ignore .fetch files in case you like to edit your project deps locally.
 /.fetch
 
@@ -34,4 +40,3 @@ memovee-*.tar
 # In case you use Node.js/npm, you want to ignore these.
 npm-debug.log
 /assets/node_modules/
-
