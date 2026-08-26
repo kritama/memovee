@@ -7,6 +7,7 @@ defmodule Memovee.AccountsFixtures do
   import Ecto.Query
 
   alias Memovee.Accounts
+  alias Memovee.Accounts.Agent
   alias Memovee.Accounts.Scope
 
   def unique_user_email, do: "user#{System.unique_integer()}@example.com"
@@ -54,7 +55,7 @@ defmodule Memovee.AccountsFixtures do
 
   def agent_fixture(owner, attrs \\ %{}) do
     attrs = Enum.into(attrs, %{identifier: unique_agent_identifier()})
-    {:ok, agent} = Accounts.create_agent(owner, attrs)
+    {:ok, agent} = Agent.create(owner, attrs)
     agent
   end
 

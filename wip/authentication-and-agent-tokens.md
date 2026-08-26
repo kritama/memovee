@@ -398,8 +398,8 @@ recoverable pending-delivery state if registration requires confirmation.
 
 ## Agent provisioning transaction
 
-`Memovee.Accounts.Actor.Manager.create_agent/2` accepts the authenticated owner
-Actor and trusted agent attributes. It creates the agent and ownership relation
+`Memovee.Accounts.Agent.create/2` accepts the authenticated owner Actor and
+trusted agent attributes. Its manager creates the agent and ownership relation
 atomically:
 
 ```text
@@ -507,14 +507,16 @@ Memovee.Accounts
 |   |-- Event
 |   |-- Transitions
 |   `-- Transit protocol implementation
-|-- User
+|-- Agent
 |   `-- Manager
+|-- User
+|   |-- Manager
+|   `-- Notifier
 |-- Token
 |   `-- Manager
 |-- Relationship
 |   `-- Manager
-|-- Scope
-`-- UserNotifier
+`-- Scope
 
 MemoveeWeb
 |-- UserAuth
@@ -532,14 +534,16 @@ Likely files:
 lib/memovee/accounts.ex
 lib/memovee/accounts/actor.ex
 lib/memovee/accounts/actor/manager.ex
+lib/memovee/accounts/agent.ex
+lib/memovee/accounts/agent/manager.ex
 lib/memovee/accounts/user.ex
 lib/memovee/accounts/user/manager.ex
+lib/memovee/accounts/user/notifier.ex
 lib/memovee/accounts/token.ex
 lib/memovee/accounts/token/manager.ex
 lib/memovee/accounts/relationship.ex
 lib/memovee/accounts/relationship/manager.ex
 lib/memovee/accounts/scope.ex
-lib/memovee/accounts/user_notifier.ex
 lib/memovee_web/user_auth.ex
 lib/memovee_web/api_auth.ex
 lib/memovee_web/live/user_live/registration.ex
@@ -550,7 +554,9 @@ lib/memovee_web/live/user_live/settings.ex
 
 The generator initially places authentication persistence functions in the
 aggregate Accounts context. Move Repo-backed behavior into `User.Manager` and
-`Token.Manager`, leaving `Memovee.Accounts` as the public delegate façade.
+`Token.Manager`, leaving `Memovee.Accounts` as the public delegate façade for
+human and token authentication. Agent ownership uses `Memovee.Accounts.Agent`
+as its focused aggregate API backed by `Agent.Manager`.
 
 Token owns pure token construction and query-building functions. Token Manager
 owns insertion, deletion, revocation, last-use updates, and transactions.

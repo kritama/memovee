@@ -1,11 +1,11 @@
 defmodule MemoveeWeb.Console.AgentLive.Index do
   use MemoveeWeb, :live_view
 
-  alias Memovee.Accounts
+  alias Memovee.Accounts.Agent
 
   @impl true
   def mount(_params, _session, socket) do
-    agents = Accounts.list_owned_agents(socket.assigns.current_scope.actor)
+    agents = Agent.list_owned(socket.assigns.current_scope.actor)
     {:ok, stream(socket, :agents, agents)}
   end
 

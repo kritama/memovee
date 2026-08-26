@@ -4,8 +4,7 @@ defmodule MemoveeWeb.Console.AgentLiveTest do
   import Phoenix.LiveViewTest
   import Memovee.AccountsFixtures
 
-  alias Memovee.Accounts
-  alias Memovee.Accounts.{Relationship, Token}
+  alias Memovee.Accounts.{Agent, Relationship, Token}
   alias Memovee.Repo
 
   setup :register_and_log_in_user
@@ -26,7 +25,7 @@ defmodule MemoveeWeb.Console.AgentLiveTest do
     {path, _flash} = assert_redirect(new_view)
     assert String.starts_with?(path, "/console/agents/")
 
-    [agent] = Accounts.list_owned_agents(scope.actor)
+    [agent] = Agent.list_owned(scope.actor)
     assert agent.identifier == "release-runner"
     assert Repo.get_by!(Relationship, target_actor_id: agent.id).actor_id == scope.actor.id
   end

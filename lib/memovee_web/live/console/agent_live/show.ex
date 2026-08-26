@@ -2,6 +2,7 @@ defmodule MemoveeWeb.Console.AgentLive.Show do
   use MemoveeWeb, :live_view
 
   alias Memovee.Accounts
+  alias Memovee.Accounts.Agent
 
   @expiry_days ~w(30 90 365)
 
@@ -9,7 +10,7 @@ defmodule MemoveeWeb.Console.AgentLive.Show do
   def mount(%{"id" => agent_id}, _session, socket) do
     owner = socket.assigns.current_scope.actor
 
-    with {:ok, agent} <- Accounts.get_owned_agent(owner, agent_id),
+    with {:ok, agent} <- Agent.get_owned(owner, agent_id),
          {:ok, tokens} <- Accounts.list_agent_api_tokens(owner, agent_id) do
       {:ok,
        socket

@@ -1,4 +1,4 @@
-defmodule Memovee.Accounts.UserNotifier do
+defmodule Memovee.Accounts.User.Notifier do
   @moduledoc """
   Delivers purpose-specific human authentication emails.
   """

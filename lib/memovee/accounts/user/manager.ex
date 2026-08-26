@@ -6,7 +6,8 @@ defmodule Memovee.Accounts.User.Manager do
   import Ecto.Query
 
   alias Ecto.Multi
-  alias Memovee.Accounts.{Actor, Token, User, UserNotifier}
+  alias Memovee.Accounts.{Actor, Token, User}
+  alias Memovee.Accounts.User.Notifier
   alias Memovee.Repo
 
   def get_by_email(email) when is_binary(email) do
@@ -124,14 +125,14 @@ defmodule Memovee.Accounts.User.Manager do
       when is_function(update_email_url_fun, 1) do
     {encoded_token, credential} = Token.build_email_token(user, "change:#{current_email}")
     Repo.insert!(credential)
-    UserNotifier.deliver_update_email_instructions(user, update_email_url_fun.(encoded_token))
+    Notifier.deliver_update_email_instructions(user, update_email_url_fun.(encoded_token))
   end
 
   def deliver_login_instructions(%User{} = user, magic_link_url_fun)
       when is_function(magic_link_url_fun, 1) do
     {encoded_token, credential} = Token.build_email_token(user, "login")
     Repo.insert!(credential)
-    UserNotifier.deliver_login_instructions(user, magic_link_url_fun.(encoded_token))
+    Notifier.deliver_login_instructions(user, magic_link_url_fun.(encoded_token))
   end
 
   defp active_user_query do

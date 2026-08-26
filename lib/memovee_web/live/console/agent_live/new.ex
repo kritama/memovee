@@ -1,12 +1,11 @@
 defmodule MemoveeWeb.Console.AgentLive.New do
   use MemoveeWeb, :live_view
 
-  alias Memovee.Accounts
-  alias Memovee.Accounts.Actor
+  alias Memovee.Accounts.{Actor, Agent}
 
   @impl true
   def mount(_params, _session, socket) do
-    changeset = Accounts.change_agent(%Actor{})
+    changeset = Agent.change(%Actor{})
     {:ok, assign(socket, form: to_form(changeset, as: :agent))}
   end
 
@@ -68,14 +67,14 @@ defmodule MemoveeWeb.Console.AgentLive.New do
   def handle_event("validate", %{"agent" => params}, socket) do
     changeset =
       %Actor{}
-      |> Accounts.change_agent(params)
+      |> Agent.change(params)
       |> Map.put(:action, :validate)
 
     {:noreply, assign(socket, form: to_form(changeset, as: :agent))}
   end
 
   def handle_event("save", %{"agent" => params}, socket) do
-    case Accounts.create_agent(socket.assigns.current_scope.actor, params) do
+    case Agent.create(socket.assigns.current_scope.actor, params) do
       {:ok, agent} ->
         {:noreply,
          socket

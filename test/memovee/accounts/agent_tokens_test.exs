@@ -4,7 +4,7 @@ defmodule Memovee.Accounts.AgentTokensTest do
   import Memovee.AccountsFixtures
 
   alias Memovee.Accounts
-  alias Memovee.Accounts.{Actor, Relationship, Token, User}
+  alias Memovee.Accounts.{Actor, Agent, Relationship, Token, User}
 
   describe "Actor classification and registration" do
     test "registration atomically creates one user Actor" do
@@ -29,7 +29,7 @@ defmodule Memovee.Accounts.AgentTokensTest do
 
     test "public changesets cannot alter Actor type or lifecycle state" do
       changeset =
-        Accounts.change_agent(%Actor{}, %{
+        Agent.change(%Actor{}, %{
           "identifier" => "  INDEXER  ",
           "type" => "user",
           "current_state" => "inactive",
@@ -69,7 +69,7 @@ defmodule Memovee.Accounts.AgentTokensTest do
     end
 
     test "creates an agent and its sole owner atomically", %{owner: owner} do
-      assert {:ok, agent} = Accounts.create_agent(owner, %{identifier: "  Media-Indexer  "})
+      assert {:ok, agent} = Agent.create(owner, %{identifier: "  Media-Indexer  "})
       assert agent.type == :agent
       assert agent.identifier == "media-indexer"
       refute Repo.get_by(User, actor_id: agent.id)
@@ -90,28 +90,28 @@ defmodule Memovee.Accounts.AgentTokensTest do
     } do
       agent = agent_fixture(owner)
 
-      assert [owned_agent] = Accounts.list_owned_agents(owner)
+      assert [owned_agent] = Agent.list_owned(owner)
       assert owned_agent.id == agent.id
-      assert {:ok, %{id: id}} = Accounts.get_owned_agent(owner, agent.id)
+      assert {:ok, %{id: id}} = Agent.get_owned(owner, agent.id)
       assert id == agent.id
 
-      assert Accounts.list_owned_agents(other_owner) == []
-      assert {:error, :not_found} = Accounts.get_owned_agent(other_owner, agent.id)
+      assert Agent.list_owned(other_owner) == []
+      assert {:error, :not_found} = Agent.get_owned(other_owner, agent.id)
     end
 
     test "enforces case-insensitive identifiers and an active human owner", %{
       owner: owner,
       other_owner: other_owner
     } do
-      assert {:ok, _agent} = Accounts.create_agent(owner, %{identifier: "Worker"})
-      assert {:error, changeset} = Accounts.create_agent(other_owner, %{identifier: "worker"})
+      assert {:ok, _agent} = Agent.create(owner, %{identifier: "Worker"})
+      assert {:error, changeset} = Agent.create(other_owner, %{identifier: "worker"})
       assert "has already been taken" in errors_on(changeset).identifier
 
       assert {:ok, %{resource: inactive_owner}} =
                Accounts.deactivate_actor(owner, other_owner)
 
       assert {:error, :unauthorized} =
-               Accounts.create_agent(inactive_owner, %{identifier: "another-worker"})
+               Agent.create(inactive_owner, %{identifier: "another-worker"})
     end
   end
 

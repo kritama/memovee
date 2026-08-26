@@ -5,8 +5,7 @@ defmodule Memovee.Accounts.Token.Manager do
 
   import Ecto.Query
 
-  alias Memovee.Accounts.{Actor, Relationship, Token, User}
-  alias Memovee.Accounts.Actor.Manager, as: ActorManager
+  alias Memovee.Accounts.{Actor, Agent, Relationship, Token, User}
   alias Memovee.Repo
 
   @api_context "api"
@@ -32,7 +31,7 @@ defmodule Memovee.Accounts.Token.Manager do
   end
 
   def create_api_token(%Actor{} = owner, agent_id, attrs) do
-    with {:ok, agent} <- ActorManager.get_owned_agent(owner, agent_id),
+    with {:ok, agent} <- Agent.get_owned(owner, agent_id),
          {client_secret, changeset} <- Token.build_api_token(agent, attrs),
          {:ok, credential} <- Repo.insert(changeset) do
       {:ok,
@@ -48,7 +47,7 @@ defmodule Memovee.Accounts.Token.Manager do
   end
 
   def list_api_tokens(%Actor{} = owner, agent_id) do
-    with {:ok, agent} <- ActorManager.get_owned_agent(owner, agent_id) do
+    with {:ok, agent} <- Agent.get_owned(owner, agent_id) do
       tokens =
         from(credential in Token,
           where: credential.actor_id == ^agent.id and credential.context == @api_context,

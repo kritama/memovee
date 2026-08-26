@@ -9,10 +9,6 @@ defmodule Memovee.Accounts do
   defdelegate get_actor!(id), to: Actor.Manager, as: :get!
   defdelegate create_user_actor(), to: Actor.Manager, as: :create_user
   defdelegate change_actor(actor), to: Actor.Manager, as: :change
-  defdelegate change_agent(actor, attrs \\ %{}), to: Actor.Manager, as: :change_agent
-  defdelegate create_agent(owner, attrs), to: Actor.Manager
-  defdelegate list_owned_agents(owner), to: Actor.Manager
-  defdelegate get_owned_agent(owner, id), to: Actor.Manager
   defdelegate activate_actor(actor, transitioning_actor), to: Actor.Manager, as: :activate
   defdelegate deactivate_actor(actor, transitioning_actor), to: Actor.Manager, as: :deactivate
 
