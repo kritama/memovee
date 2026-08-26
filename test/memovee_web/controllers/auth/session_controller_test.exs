@@ -70,6 +70,32 @@ defmodule MemoveeWeb.Auth.SessionControllerTest do
       assert Phoenix.Flash.get(conn.assigns.flash, :error) == "Invalid email or password"
       assert redirected_to(conn) == ~p"/users/log-in"
     end
+
+    test "rejects a submission missing the password", %{conn: conn, user: user} do
+      conn = post(conn, ~p"/auth/session", %{"user" => %{"email" => user.email}})
+
+      assert redirected_to(conn) == ~p"/users/log-in"
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) == "Invalid email or password"
+      assert Phoenix.Flash.get(conn.assigns.flash, :email) == user.email
+      refute get_session(conn, :user_token)
+    end
+
+    test "rejects missing and non-binary credential parameters" do
+      malformed_params = [
+        %{"user" => %{"password" => "password"}},
+        %{"user" => %{}},
+        %{"user" => %{"email" => [], "password" => %{}}},
+        %{}
+      ]
+
+      for params <- malformed_params do
+        conn = post(build_conn(), ~p"/auth/session", params)
+
+        assert redirected_to(conn) == ~p"/users/log-in"
+        assert Phoenix.Flash.get(conn.assigns.flash, :error) == "Invalid email or password"
+        refute get_session(conn, :user_token)
+      end
+    end
   end
 
   describe "POST /auth/session - magic link" do

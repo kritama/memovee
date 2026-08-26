@@ -2,6 +2,9 @@ defmodule MemoveeWeb.UserLive.SettingsTest do
   use MemoveeWeb.ConnCase, async: false
 
   alias Memovee.Accounts
+  alias Memovee.Accounts.Scope
+  alias MemoveeWeb.UserLive.Settings
+  alias Phoenix.LiveView
   import Phoenix.LiveViewTest
   import Memovee.AccountsFixtures
 
@@ -111,6 +114,20 @@ defmodule MemoveeWeb.UserLive.SettingsTest do
       assert result =~ "Change Email"
       assert result =~ "did not change"
     end
+
+    test "redirects to reauthentication when sudo mode expires before submission", %{user: user} do
+      {:noreply, socket} =
+        Settings.handle_event(
+          "update_email",
+          %{"user" => %{"email" => unique_user_email()}},
+          expired_settings_socket(user)
+        )
+
+      assert {:live, :redirect, %{to: "/users/log-in", kind: :push}} = socket.redirected
+
+      assert Phoenix.Flash.get(socket.assigns.flash, :error) ==
+               "You must re-authenticate to access this page."
+    end
   end
 
   describe "update password form" do
@@ -182,5 +199,40 @@ defmodule MemoveeWeb.UserLive.SettingsTest do
       assert result =~ "should be at least 12 character(s)"
       assert result =~ "does not match password"
     end
+
+    test "redirects to reauthentication when sudo mode expires before submission", %{user: user} do
+      {:noreply, socket} =
+        Settings.handle_event(
+          "update_password",
+          %{
+            "user" => %{
+              "password" => valid_user_password(),
+              "password_confirmation" => valid_user_password()
+            }
+          },
+          expired_settings_socket(user)
+        )
+
+      assert {:live, :redirect, %{to: "/users/log-in", kind: :push}} = socket.redirected
+      refute Map.get(socket.assigns, :trigger_submit)
+
+      assert Phoenix.Flash.get(socket.assigns.flash, :error) ==
+               "You must re-authenticate to access this page."
+    end
+  end
+
+  defp expired_settings_socket(user) do
+    expired_user =
+      %{user | authenticated_at: DateTime.add(DateTime.utc_now(:second), -11, :minute)}
+
+    %LiveView.Socket{
+      endpoint: MemoveeWeb.Endpoint,
+      router: MemoveeWeb.Router,
+      assigns: %{
+        __changed__: %{},
+        flash: %{},
+        current_scope: Scope.for_user(expired_user)
+      }
+    }
   end
 end

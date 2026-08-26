@@ -27,19 +27,42 @@ defmodule MemoveeWeb.SessionHelper do
   end
 
   # email + password login
-  def create_session(conn, %{"user" => user_params}, info) do
-    %{"email" => email, "password" => password} = user_params
-
+  def create_session(
+        conn,
+        %{"user" => %{"email" => email, "password" => password} = user_params},
+        info
+      )
+      when is_binary(email) and is_binary(password) do
     if user = Accounts.get_user_by_email_and_password(email, password) do
       conn
       |> put_flash(:info, info)
       |> UserAuth.log_in_user(user, user_params)
     else
-      # In order to prevent user enumeration attacks, don't disclose whether the email is registered.
-      conn
-      |> put_flash(:error, "Invalid email or password")
-      |> put_flash(:email, String.slice(email, 0, 160))
-      |> redirect(to: ~p"/users/log-in")
+      invalid_credentials(conn, email)
     end
   end
+
+  def create_session(conn, params, _info) do
+    email =
+      case params do
+        %{"user" => %{"email" => email}} when is_binary(email) -> email
+        _ -> nil
+      end
+
+    invalid_credentials(conn, email)
+  end
+
+  # Do not disclose whether the supplied email is registered.
+  defp invalid_credentials(conn, email) do
+    conn
+    |> put_flash(:error, "Invalid email or password")
+    |> maybe_put_email(email)
+    |> redirect(to: ~p"/users/log-in")
+  end
+
+  defp maybe_put_email(conn, email) when is_binary(email) do
+    put_flash(conn, :email, String.slice(email, 0, 160))
+  end
+
+  defp maybe_put_email(conn, _email), do: conn
 end
