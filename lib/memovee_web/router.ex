@@ -63,6 +63,10 @@ defmodule MemoveeWeb.Router do
       live "/console/agents/new", Console.AgentLive.New, :new
       live "/console/agents/:id", Console.AgentLive.Show, :show
     end
+  end
+
+  scope "/", MemoveeWeb do
+    pipe_through [:browser, :require_authenticated_user, :require_sudo_mode]
 
     resources "/auth/password", Auth.PasswordController, only: [:update], singleton: true
   end

@@ -2,8 +2,6 @@ defmodule Memovee.Repo.Migrations.CreateActors do
   use Ecto.Migration
 
   def change do
-    execute "CREATE EXTENSION IF NOT EXISTS citext", ""
-
     create table(:actors, primary_key: false) do
       add :id, :binary_id, primary_key: true
       add :type, :string, null: false

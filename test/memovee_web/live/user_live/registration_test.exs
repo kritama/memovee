@@ -1,8 +1,10 @@
 defmodule MemoveeWeb.UserLive.RegistrationTest do
-  use MemoveeWeb.ConnCase, async: true
+  use MemoveeWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
   import Memovee.AccountsFixtures
+
+  alias Memovee.Accounts
 
   describe "Registration page" do
     test "renders registration page", %{conn: conn} do
@@ -63,6 +65,30 @@ defmodule MemoveeWeb.UserLive.RegistrationTest do
         |> render_submit()
 
       assert result =~ "has already been taken"
+    end
+
+    test "keeps the account recoverable when confirmation delivery fails", %{conn: conn} do
+      mailer_config = Application.fetch_env!(:memovee, Memovee.Mailer)
+
+      Application.put_env(
+        :memovee,
+        Memovee.Mailer,
+        Keyword.put(mailer_config, :adapter, Memovee.Test.FailingMailerAdapter)
+      )
+
+      on_exit(fn -> Application.put_env(:memovee, Memovee.Mailer, mailer_config) end)
+
+      {:ok, lv, _html} = live(conn, ~p"/users/register")
+      email = unique_user_email()
+
+      {:ok, _login_live, html} =
+        lv
+        |> form("#registration_form", user: valid_user_attributes(email: email))
+        |> render_submit()
+        |> follow_redirect(conn, ~p"/users/log-in")
+
+      assert html =~ "Your account was created, but the confirmation email could not be sent."
+      assert Accounts.get_user_by_email(email)
     end
   end
 

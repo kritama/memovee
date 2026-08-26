@@ -39,7 +39,7 @@ defmodule Memovee.Accounts.User.Manager do
     end
   end
 
-  def sudo_mode?(user, minutes \\ -20)
+  def sudo_mode?(user, minutes \\ -10)
 
   def sudo_mode?(%User{authenticated_at: timestamp}, minutes)
       when is_struct(timestamp, DateTime) do

@@ -20,7 +20,7 @@ defmodule Memovee.Accounts do
 
   defdelegate get_user!(id), to: User.Manager, as: :get!
   defdelegate register_user(attrs), to: User.Manager, as: :register
-  defdelegate sudo_mode?(user, minutes \\ -20), to: User.Manager
+  defdelegate sudo_mode?(user, minutes \\ -10), to: User.Manager
 
   defdelegate change_user_email(user, attrs \\ %{}, opts \\ []),
     to: User.Manager,

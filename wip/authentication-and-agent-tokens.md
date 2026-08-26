@@ -185,9 +185,10 @@ User Actors do not need an Actor identifier in the first version. User email is
 mutable authentication data and must not be duplicated as the Actor's stable
 identity.
 
-Before applying the Actor type migration to a non-empty database, inspect all
-persisted Actors and classify them explicitly. A production migration must not
-silently assume that every existing Actor is a human user.
+This implementation targets an undeployed, resettable database and may update
+the initial Actor migration directly. After the first deployment, any Actor
+classification change must use a forward migration that inspects persisted
+Actors rather than silently assuming every existing Actor is a human user.
 
 ## User schema
 
@@ -602,9 +603,9 @@ mix ecto.gen.migration create_actor_relationships
 Add owner and target UUID foreign keys, ownership constraints, and lookup
 indexes.
 
-Do not rewrite an already-applied migration to reorder these changes. If any
-development migration has already been applied, add a new migration and prove
-both upgrade-from-current and migrate-from-empty behavior.
+Because the application has not been deployed, these initial migrations may be
+rewritten and development databases reset. Once a migration has shipped, treat
+the history as immutable and introduce only forward migrations.
 
 ## Provisioning experience
 
@@ -760,8 +761,7 @@ The design is implemented when:
 - API secrets are hashed at rest and shown only once;
 - generated Phoenix authentication behavior remains covered by its adapted test
   suite;
-- migrations work both from an existing pre-authentication database and from an
-  empty database;
+- migrations rebuild the undeployed application database from empty;
 - focused Accounts, authentication, LiveView, and API tests pass;
 - `mix precommit` passes; and
 - `git diff --check` is clean.

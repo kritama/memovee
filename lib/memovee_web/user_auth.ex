@@ -238,7 +238,7 @@ defmodule MemoveeWeb.UserAuth do
   def on_mount(:require_sudo_mode, _params, session, socket) do
     socket = mount_current_scope(socket, session)
 
-    if Accounts.sudo_mode?(socket.assigns.current_scope.user, -10) do
+    if Accounts.sudo_mode?(socket.assigns.current_scope.user) do
       {:cont, socket}
     else
       socket =
@@ -279,6 +279,20 @@ defmodule MemoveeWeb.UserAuth do
       conn
       |> put_flash(:error, "You must log in to access this page.")
       |> maybe_store_return_to()
+      |> redirect(to: ~p"/users/log-in")
+      |> halt()
+    end
+  end
+
+  @doc """
+  Requires the current user to have authenticated within the shared sudo window.
+  """
+  def require_sudo_mode(conn, _opts) do
+    if Accounts.sudo_mode?(conn.assigns.current_scope.user) do
+      conn
+    else
+      conn
+      |> put_flash(:error, "You must re-authenticate to access this page.")
       |> redirect(to: ~p"/users/log-in")
       |> halt()
     end

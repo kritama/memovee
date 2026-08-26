@@ -58,19 +58,13 @@ defmodule MemoveeWeb.UserLive.Registration do
   def handle_event("save", %{"user" => user_params}, socket) do
     case Accounts.register_user(user_params) do
       {:ok, user} ->
-        {:ok, _} =
+        delivery_result =
           Accounts.deliver_login_instructions(
             user,
             &url(~p"/users/log-in/#{&1}")
           )
 
-        {:noreply,
-         socket
-         |> put_flash(
-           :info,
-           "An email was sent to #{user.email}, please access it to confirm your account."
-         )
-         |> push_navigate(to: ~p"/users/log-in")}
+        {:noreply, handle_delivery_result(socket, user, delivery_result)}
 
       {:error, %Ecto.Changeset{} = changeset} ->
         {:noreply, assign_form(socket, changeset)}
@@ -85,5 +79,24 @@ defmodule MemoveeWeb.UserLive.Registration do
   defp assign_form(socket, %Ecto.Changeset{} = changeset) do
     form = to_form(changeset, as: "user")
     assign(socket, form: form)
+  end
+
+  defp handle_delivery_result(socket, user, {:ok, _email}) do
+    socket
+    |> put_flash(
+      :info,
+      "An email was sent to #{user.email}, please access it to confirm your account."
+    )
+    |> push_navigate(to: ~p"/users/log-in")
+  end
+
+  defp handle_delivery_result(socket, _user, {:error, _reason}) do
+    socket
+    |> put_flash(
+      :error,
+      "Your account was created, but the confirmation email could not be sent. " <>
+        "Log in to request a new confirmation email."
+    )
+    |> push_navigate(to: ~p"/users/log-in")
   end
 end
