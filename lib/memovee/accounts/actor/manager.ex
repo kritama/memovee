@@ -15,4 +15,12 @@ defmodule Memovee.Accounts.Actor.Manager do
   end
 
   def change(%Actor{} = actor), do: Actor.changeset(actor)
+
+  def activate(%Actor{} = actor, %Actor{} = transitioning_actor) do
+    Eventful.Transit.perform(transitioning_actor, actor, "activate")
+  end
+
+  def deactivate(%Actor{} = actor, %Actor{} = transitioning_actor) do
+    Eventful.Transit.perform(transitioning_actor, actor, "deactivate")
+  end
 end
