@@ -83,7 +83,8 @@ defmodule Memovee.Accounts.Agent.Manager do
     end
   end
 
-  defp owned_query(owner_id, agent_id) do
+  @doc false
+  def owned_query(owner_id, agent_id) do
     from agent in Actor,
       join: relationship in Relationship,
       on:

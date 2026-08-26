@@ -6,6 +6,7 @@ defmodule Memovee.Accounts.Token.Manager do
   import Ecto.Query
 
   alias Memovee.Accounts.{Actor, Agent, Relationship, Token, User}
+  alias Memovee.Accounts.Agent.Manager, as: AgentManager
   alias Memovee.Repo
 
   @api_context "api"
@@ -30,23 +31,17 @@ defmodule Memovee.Accounts.Token.Manager do
     :ok
   end
 
-  def create_api_token(%Actor{} = owner, agent_id, attrs) do
-    with {:ok, agent} <- Agent.get_owned(owner, agent_id),
-         {:ok, client_secret, changeset} <- Token.build_api_token(agent, attrs),
-         {:ok, credential} <- Repo.insert(changeset) do
-      {:ok,
-       %{
-         credential: %{
-           client_id: credential.id,
-           client_secret: client_secret,
-           expires_at: credential.expires_at
-         },
-         token: credential
-       }}
-    else
-      {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
-      {:error, reason} -> {:error, reason}
-    end
+  def create_api_token(%Actor{id: owner_id}, agent_id, attrs) do
+    Repo.transaction(fn ->
+      owner_id
+      |> AgentManager.owned_query(agent_id)
+      |> lock("FOR UPDATE")
+      |> Repo.one()
+      |> case do
+        {%Actor{} = agent, %Actor{}} -> insert_api_token(agent, attrs)
+        nil -> Repo.rollback(:not_found)
+      end
+    end)
   end
 
   def get_agent_with_api_tokens(%Actor{} = owner, agent_id) do
@@ -108,6 +103,22 @@ defmodule Memovee.Accounts.Token.Manager do
       where:
         credential.actor_id == ^agent_id and credential.context == @api_context and
           owner.type == :user and owner.current_state == "active"
+  end
+
+  defp insert_api_token(agent, attrs) do
+    with {:ok, client_secret, changeset} <- Token.build_api_token(agent, attrs),
+         {:ok, credential} <- Repo.insert(changeset) do
+      %{
+        credential: %{
+          client_id: credential.id,
+          client_secret: client_secret,
+          expires_at: credential.expires_at
+        },
+        token: credential
+      }
+    else
+      {:error, reason} -> Repo.rollback(reason)
+    end
   end
 
   defp active_api_credential(token_id) do
