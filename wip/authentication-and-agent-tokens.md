@@ -1,9 +1,9 @@
 # Authentication and Agent Tokens
 
-Status: WIP design; not implemented. The Accounts Actor and its Eventful
-lifecycle are being established separately. Phoenix authentication, Actor
-classification, human User attachment, agent ownership, and centralized Actor
-tokens remain to be built.
+Status: Implemented on 2026-08-26. Phoenix authentication, Actor
+classification, human User attachment, agent ownership, centralized Actor
+tokens, direct API authentication, and the agent credential UI are covered by
+the repository test suite. This implementation has not been deployed.
 
 ## Goal
 
@@ -776,10 +776,9 @@ boundaries established by this design.
 
 ## Validation limits
 
-This document records an implementation-ready design only. No authentication
-generator, migration, database upgrade, API credential, route, mail delivery,
-or runtime request has been created or validated by writing this document.
-
-Implementation acceptance requires the migration and test gates above. Static
-review of this WIP must not be reported as live authentication or API-key
-acceptance.
+The undeployed migration chain was validated from an empty test database, and
+the focused Accounts, browser authentication, direct API authentication,
+LiveView, and full `mix precommit` gates passed locally. The local mail adapter
+was exercised by the generated tests; no production mail provider, deployed
+database upgrade, production API credential, or live external request was
+validated. Repository validation must not be reported as deployed acceptance.

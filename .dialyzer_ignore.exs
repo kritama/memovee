@@ -1,9 +1,8 @@
-# OTP 29 exposes Ecto.Multi's internal MapSet representation as an opaque :sets value.
+# OTP 28+ exposes Ecto.Multi's internal MapSet representation as an opaque :sets value.
 # See https://github.com/elixir-ecto/ecto/issues/4707.
+#
+# Dialyxir applies regex filters to its short output. Filtering the warning type globally keeps
+# this workaround independent of each Ecto.Multi call site while retaining other opaque warnings.
 [
-  {"lib/memovee/memory/post/manager.ex", "Type mismatch in call without opaque term in update."},
-  {"lib/memovee/memory/projection/manager.ex",
-   "Type mismatch in call without opaque term in run."},
-  {"lib/memovee/memory/projection/transitions.ex",
-   "Type mismatch in call without opaque term in insert."}
+  ~r/:call_without_opaque Type mismatch in call without opaque term in/
 ]
