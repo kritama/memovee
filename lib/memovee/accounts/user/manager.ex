@@ -88,31 +88,17 @@ defmodule Memovee.Accounts.User.Manager do
   end
 
   def login_by_magic_link(encoded_token) do
-    with {:ok, query} <- Token.verify_magic_link_token_query(encoded_token) do
-      case Repo.one(query) do
-        {%User{confirmed_at: nil, hashed_password: hash}, _credential, _actor}
-        when not is_nil(hash) ->
-          raise """
-          magic link log in is not allowed for unconfirmed users with a password set!
+    case Token.verify_magic_link_token_query(encoded_token) do
+      {:ok, query} ->
+        Repo.transact(fn ->
+          query
+          |> lock("FOR UPDATE")
+          |> Repo.one()
+          |> consume_magic_link()
+        end)
 
-          This cannot happen with the default implementation, which indicates that you
-          might have adapted the code to a different use case. Please make sure to read the
-          "Mixing magic link and password registration" section of `mix help phx.gen.auth`.
-          """
-
-        {%User{confirmed_at: nil} = user, _credential, actor} ->
-          user
-          |> Map.put(:actor, actor)
-          |> User.confirm_changeset()
-          |> update_user_and_delete_all_tokens()
-
-        {%User{} = user, %Token{} = credential, actor} ->
-          Repo.delete!(credential)
-          {:ok, {%{user | actor: actor}, []}}
-
-        nil ->
-          {:error, :not_found}
-      end
+      _ ->
+        {:error, :not_found}
     end
   end
 
@@ -139,6 +125,39 @@ defmodule Memovee.Accounts.User.Manager do
       join: actor in assoc(user, :actor),
       where: actor.type == :user and actor.current_state == "active"
   end
+
+  defp consume_magic_link({%User{confirmed_at: nil, hashed_password: hash}, _credential, _actor})
+       when not is_nil(hash) do
+    raise """
+    magic link log in is not allowed for unconfirmed users with a password set!
+
+    This cannot happen with the default implementation, which indicates that you
+    might have adapted the code to a different use case. Please make sure to read the
+    "Mixing magic link and password registration" section of `mix help phx.gen.auth`.
+    """
+  end
+
+  defp consume_magic_link({%User{confirmed_at: nil} = user, _credential, actor}) do
+    changeset = user |> Map.put(:actor, actor) |> User.confirm_changeset()
+
+    case Repo.update(changeset) do
+      {:ok, confirmed_user} ->
+        tokens_to_expire = delete_all_tokens(confirmed_user.actor_id)
+        {:ok, {%{confirmed_user | actor: actor}, tokens_to_expire}}
+
+      {:error, _changeset} = error ->
+        error
+    end
+  end
+
+  defp consume_magic_link({%User{} = user, %Token{} = credential, actor}) do
+    case Repo.delete(credential) do
+      {:ok, _credential} -> {:ok, {%{user | actor: actor}, []}}
+      {:error, _changeset} = error -> error
+    end
+  end
+
+  defp consume_magic_link(nil), do: {:error, :not_found}
 
   defp update_user_and_delete_all_tokens(changeset) do
     Repo.transact(fn ->
