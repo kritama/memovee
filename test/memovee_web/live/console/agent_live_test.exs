@@ -43,15 +43,18 @@ defmodule MemoveeWeb.Console.AgentLiveTest do
       |> form("#token-form", token: %{label: "production", expires_in_days: "90"})
       |> render_submit()
 
-    assert html =~ ~s(id="api-secret")
-    assert html =~ ~s(id="api-client-id")
-    assert html =~ ~s(id="api-client-secret")
+    assert has_element?(view, "#api-secret")
+    assert has_element?(view, "#api-client-id")
+    assert has_element?(view, "#api-client-secret")
 
-    [_, plaintext_secret] =
-      Regex.run(
-        ~r/id="api-client-secret"[^>]*>\s*([A-Za-z0-9_-]{43})/s,
-        html
-      )
+    plaintext_secret =
+      html
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("#api-client-secret")
+      |> LazyHTML.text()
+      |> String.trim()
+
+    assert plaintext_secret =~ ~r/\A[A-Za-z0-9_-]{43}\z/
 
     stored = Repo.get_by!(Token, actor_id: agent.id, context: "api")
     refute stored.token == plaintext_secret
@@ -60,8 +63,14 @@ defmodule MemoveeWeb.Console.AgentLiveTest do
     {:ok, reconnected_view, reconnected_html} =
       live(conn, ~p"/console/agents/#{agent.id}")
 
-    refute reconnected_html =~ ~s(id="api-secret")
-    refute reconnected_html =~ plaintext_secret
+    refute has_element?(reconnected_view, "#api-secret")
+
+    reconnected_text =
+      reconnected_html
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.text()
+
+    refute reconnected_text =~ plaintext_secret
     assert has_element?(reconnected_view, "#tokens-#{stored.id}")
     assert has_element?(reconnected_view, "#revoke-token-#{stored.id}")
   end
