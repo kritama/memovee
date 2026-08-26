@@ -13,8 +13,9 @@ defmodule MemoveeWeb.Router do
     plug :fetch_current_scope_for_user
   end
 
-  pipeline :api do
+  pipeline :tama_api do
     plug :accepts, ["json"]
+    plug OpenApiSpex.Plug.PutApiSpec, module: MemoveeWeb.Tama.ApiSpec
   end
 
   pipeline :authenticated_api do
@@ -27,10 +28,18 @@ defmodule MemoveeWeb.Router do
     get "/", PageController, :home
   end
 
-  scope "/api", MemoveeWeb do
-    pipe_through [:api, :authenticated_api]
+  scope "/tama" do
+    pipe_through :tama_api
 
-    get "/principal", ApiPrincipalController, :show
+    get "/openapi", OpenApiSpex.Plug.RenderSpec, []
+  end
+
+  scope "/tama", MemoveeWeb.Tama do
+    pipe_through [:tama_api, :authenticated_api]
+
+    scope "/memory", Memory do
+      resources "/posts", PostController, only: [:create]
+    end
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
