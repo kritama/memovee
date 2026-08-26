@@ -17,12 +17,18 @@ defmodule MemoveeWeb.Auth.PasswordController do
         |> UserAuth.log_in_user(updated_user, user_params)
 
       {:error, %Ecto.Changeset{}} ->
-        conn
-        |> put_flash(
-          :error,
-          "Password could not be updated. Check the requirements and try again."
-        )
-        |> redirect(to: ~p"/users/settings")
+        reject_invalid_password(conn)
     end
+  end
+
+  def update(conn, _params), do: reject_invalid_password(conn)
+
+  defp reject_invalid_password(conn) do
+    conn
+    |> put_flash(
+      :error,
+      "Password could not be updated. Check the requirements and try again."
+    )
+    |> redirect(to: ~p"/users/settings")
   end
 end

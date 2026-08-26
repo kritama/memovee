@@ -41,4 +41,18 @@ defmodule MemoveeWeb.Auth.PasswordControllerTest do
     assert Phoenix.Flash.get(conn.assigns.flash, :error) ==
              "Password could not be updated. Check the requirements and try again."
   end
+
+  test "rejects requests without user parameters", %{conn: conn} do
+    user = user_fixture()
+
+    conn =
+      conn
+      |> log_in_user(user)
+      |> patch(~p"/auth/password", %{})
+
+    assert redirected_to(conn) == ~p"/users/settings"
+
+    assert Phoenix.Flash.get(conn.assigns.flash, :error) ==
+             "Password could not be updated. Check the requirements and try again."
+  end
 end
