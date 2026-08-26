@@ -1,0 +1,108 @@
+defmodule MemoveeWeb.UserLive.RegistrationTest do
+  use MemoveeWeb.ConnCase, async: false
+
+  import Phoenix.LiveViewTest
+  import Memovee.AccountsFixtures
+
+  alias Memovee.Accounts
+
+  describe "Registration page" do
+    test "renders registration page", %{conn: conn} do
+      {:ok, _lv, html} = live(conn, ~p"/users/register")
+
+      assert html =~ "Register"
+      assert html =~ "Log in"
+    end
+
+    test "redirects if already logged in", %{conn: conn} do
+      result =
+        conn
+        |> log_in_user(user_fixture())
+        |> live(~p"/users/register")
+        |> follow_redirect(conn, ~p"/users/settings")
+
+      assert {:ok, _conn} = result
+    end
+
+    test "renders errors for invalid data", %{conn: conn} do
+      {:ok, lv, _html} = live(conn, ~p"/users/register")
+
+      result =
+        lv
+        |> element("#registration_form")
+        |> render_change(user: %{"email" => "with spaces"})
+
+      assert result =~ "Register"
+      assert result =~ "must have the @ sign and no spaces"
+    end
+  end
+
+  describe "register user" do
+    test "creates account but does not log in", %{conn: conn} do
+      {:ok, lv, _html} = live(conn, ~p"/users/register")
+
+      email = unique_user_email()
+      form = form(lv, "#registration_form", user: valid_user_attributes(email: email))
+
+      {:ok, _lv, html} =
+        render_submit(form)
+        |> follow_redirect(conn, ~p"/users/log-in")
+
+      assert html =~
+               ~r/An email was sent to .*, please access it to confirm your account/
+    end
+
+    test "renders errors for duplicated email", %{conn: conn} do
+      {:ok, lv, _html} = live(conn, ~p"/users/register")
+
+      user = user_fixture(%{email: "test@email.com"})
+
+      result =
+        lv
+        |> form("#registration_form",
+          user: %{"email" => user.email}
+        )
+        |> render_submit()
+
+      assert result =~ "has already been taken"
+    end
+
+    test "keeps the account recoverable when confirmation delivery fails", %{conn: conn} do
+      mailer_config = Application.fetch_env!(:memovee, Memovee.Mailer)
+
+      Application.put_env(
+        :memovee,
+        Memovee.Mailer,
+        Keyword.put(mailer_config, :adapter, Memovee.Test.FailingMailerAdapter)
+      )
+
+      on_exit(fn -> Application.put_env(:memovee, Memovee.Mailer, mailer_config) end)
+
+      {:ok, lv, _html} = live(conn, ~p"/users/register")
+      email = unique_user_email()
+
+      {:ok, _login_live, html} =
+        lv
+        |> form("#registration_form", user: valid_user_attributes(email: email))
+        |> render_submit()
+        |> follow_redirect(conn, ~p"/users/log-in")
+
+      assert html =~ "Your account was created, but the confirmation email could not be sent."
+      assert Accounts.get_user_by_email(email)
+    end
+  end
+
+  describe "registration navigation" do
+    test "redirects to login page when the Log in button is clicked", %{conn: conn} do
+      {:ok, lv, _html} = live(conn, ~p"/users/register")
+
+      {:ok, _login_live, login_html} =
+        lv
+        |> element("main a", "Log in")
+        |> render_click()
+        |> follow_redirect(conn, ~p"/users/log-in")
+
+      assert login_html =~ "Log in"
+    end
+  end
+end

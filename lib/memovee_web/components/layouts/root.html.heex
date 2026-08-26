@@ -8,36 +8,36 @@
     <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
     <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
     </script>
-    <script>
-      (() => {
-        const systemTheme = () => matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-
-        const setTheme = (theme) => {
-          if (theme === "system") {
-            localStorage.removeItem("phx:theme");
-            document.documentElement.setAttribute("data-theme", systemTheme());
-            document.documentElement.setAttribute("data-theme-source", "system");
-          } else {
-            localStorage.setItem("phx:theme", theme);
-            document.documentElement.setAttribute("data-theme", theme);
-            document.documentElement.setAttribute("data-theme-source", "user");
-          }
-        };
-        if (!document.documentElement.hasAttribute("data-theme")) {
-          setTheme(localStorage.getItem("phx:theme") || "system");
-        }
-        window.addEventListener("storage", (e) => e.key === "phx:theme" && setTheme(e.newValue || "system"));
-        window.addEventListener("phx:set-theme", (e) => setTheme(e.target.dataset.phxTheme));
-
-        matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
-          if (document.documentElement.getAttribute("data-theme-source") === "system") {
-            document.documentElement.setAttribute("data-theme", systemTheme());
-          }
-        });
-      })();
-    </script>
   </head>
   <body>
+    <nav
+      id="account-navigation"
+      class="relative z-10 flex min-h-12 items-center justify-end gap-5 border-b border-slate-200 bg-white px-4 text-sm text-slate-600 sm:px-6 lg:px-8"
+    >
+      <%= if @current_scope do %>
+        <span class="hidden text-slate-500 sm:inline">{@current_scope.user.email}</span>
+        <.link href={~p"/console/agents"} class="font-medium transition hover:text-sky-800">
+          Agents
+        </.link>
+        <.link href={~p"/users/settings"} class="font-medium transition hover:text-sky-800">
+          Settings
+        </.link>
+        <.link
+          href={~p"/auth/session"}
+          method="delete"
+          class="font-medium transition hover:text-rose-700"
+        >
+          Log out
+        </.link>
+      <% else %>
+        <.link href={~p"/users/register"} class="font-medium transition hover:text-sky-800">
+          Register
+        </.link>
+        <.link href={~p"/users/log-in"} class="font-medium transition hover:text-sky-800">
+          Log in
+        </.link>
+      <% end %>
+    </nav>
     {@inner_content}
   </body>
 </html>

@@ -1,9 +1,9 @@
 # Authentication and Agent Tokens
 
-Status: WIP design; not implemented. The Accounts Actor and its Eventful
-lifecycle are being established separately. Phoenix authentication, Actor
-classification, human User attachment, agent ownership, and centralized Actor
-tokens remain to be built.
+Status: Implemented on 2026-08-26. Phoenix authentication, Actor
+classification, human User attachment, agent ownership, centralized Actor
+tokens, direct API authentication, and the agent credential UI are covered by
+the repository test suite. This implementation has not been deployed.
 
 ## Goal
 
@@ -185,9 +185,10 @@ User Actors do not need an Actor identifier in the first version. User email is
 mutable authentication data and must not be duplicated as the Actor's stable
 identity.
 
-Before applying the Actor type migration to a non-empty database, inspect all
-persisted Actors and classify them explicitly. A production migration must not
-silently assume that every existing Actor is a human user.
+This implementation targets an undeployed, resettable database and may update
+the initial Actor migration directly. After the first deployment, any Actor
+classification change must use a forward migration that inspects persisted
+Actors rather than silently assuming every existing Actor is a human user.
 
 ## User schema
 
@@ -398,8 +399,8 @@ recoverable pending-delivery state if registration requires confirmation.
 
 ## Agent provisioning transaction
 
-`Memovee.Accounts.Actor.Manager.create_agent/2` accepts the authenticated owner
-Actor and trusted agent attributes. It creates the agent and ownership relation
+`Memovee.Accounts.Agent.create/2` accepts the authenticated owner Actor and
+trusted agent attributes. Its manager creates the agent and ownership relation
 atomically:
 
 ```text
@@ -507,14 +508,16 @@ Memovee.Accounts
 |   |-- Event
 |   |-- Transitions
 |   `-- Transit protocol implementation
-|-- User
+|-- Agent
 |   `-- Manager
+|-- User
+|   |-- Manager
+|   `-- Notifier
 |-- Token
 |   `-- Manager
 |-- Relationship
 |   `-- Manager
-|-- Scope
-`-- UserNotifier
+`-- Scope
 
 MemoveeWeb
 |-- UserAuth
@@ -532,14 +535,16 @@ Likely files:
 lib/memovee/accounts.ex
 lib/memovee/accounts/actor.ex
 lib/memovee/accounts/actor/manager.ex
+lib/memovee/accounts/agent.ex
+lib/memovee/accounts/agent/manager.ex
 lib/memovee/accounts/user.ex
 lib/memovee/accounts/user/manager.ex
+lib/memovee/accounts/user/notifier.ex
 lib/memovee/accounts/token.ex
 lib/memovee/accounts/token/manager.ex
 lib/memovee/accounts/relationship.ex
 lib/memovee/accounts/relationship/manager.ex
 lib/memovee/accounts/scope.ex
-lib/memovee/accounts/user_notifier.ex
 lib/memovee_web/user_auth.ex
 lib/memovee_web/api_auth.ex
 lib/memovee_web/live/user_live/registration.ex
@@ -550,7 +555,9 @@ lib/memovee_web/live/user_live/settings.ex
 
 The generator initially places authentication persistence functions in the
 aggregate Accounts context. Move Repo-backed behavior into `User.Manager` and
-`Token.Manager`, leaving `Memovee.Accounts` as the public delegate façade.
+`Token.Manager`, leaving `Memovee.Accounts` as the public delegate façade for
+human and token authentication. Agent ownership uses `Memovee.Accounts.Agent`
+as its focused aggregate API backed by `Agent.Manager`.
 
 Token owns pure token construction and query-building functions. Token Manager
 owns insertion, deletion, revocation, last-use updates, and transactions.
@@ -596,9 +603,9 @@ mix ecto.gen.migration create_actor_relationships
 Add owner and target UUID foreign keys, ownership constraints, and lookup
 indexes.
 
-Do not rewrite an already-applied migration to reorder these changes. If any
-development migration has already been applied, add a new migration and prove
-both upgrade-from-current and migrate-from-empty behavior.
+Because the application has not been deployed, these initial migrations may be
+rewritten and development databases reset. Once a migration has shipped, treat
+the history as immutable and introduce only forward migrations.
 
 ## Provisioning experience
 
@@ -754,8 +761,7 @@ The design is implemented when:
 - API secrets are hashed at rest and shown only once;
 - generated Phoenix authentication behavior remains covered by its adapted test
   suite;
-- migrations work both from an existing pre-authentication database and from an
-  empty database;
+- migrations rebuild the undeployed application database from empty;
 - focused Accounts, authentication, LiveView, and API tests pass;
 - `mix precommit` passes; and
 - `git diff --check` is clean.
@@ -776,10 +782,9 @@ boundaries established by this design.
 
 ## Validation limits
 
-This document records an implementation-ready design only. No authentication
-generator, migration, database upgrade, API credential, route, mail delivery,
-or runtime request has been created or validated by writing this document.
-
-Implementation acceptance requires the migration and test gates above. Static
-review of this WIP must not be reported as live authentication or API-key
-acceptance.
+The undeployed migration chain was validated from an empty test database, and
+the focused Accounts, browser authentication, direct API authentication,
+LiveView, and full `mix precommit` gates passed locally. The local mail adapter
+was exercised by the generated tests; no production mail provider, deployed
+database upgrade, production API credential, or live external request was
+validated. Repository validation must not be reported as deployed acceptance.
