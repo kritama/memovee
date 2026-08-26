@@ -6,11 +6,9 @@ defmodule Memovee.Accounts do
 
   alias __MODULE__.{Actor, Token, User}
 
-  defdelegate get_actor!(id), to: Actor.Manager, as: :get!
-  defdelegate create_user_actor(), to: Actor.Manager, as: :create_user
-  defdelegate change_actor(actor), to: Actor.Manager, as: :change
-  defdelegate activate_actor(actor, transitioning_actor), to: Actor.Manager, as: :activate
-  defdelegate deactivate_actor(actor, transitioning_actor), to: Actor.Manager, as: :deactivate
+  defdelegate transition_actor(actor, transitioning_actor, event),
+    to: Actor.Manager,
+    as: :transition
 
   defdelegate get_user_by_email(email), to: User.Manager, as: :get_by_email
 
@@ -50,11 +48,11 @@ defmodule Memovee.Accounts do
     to: Token.Manager,
     as: :create_api_token
 
-  defdelegate list_agent_api_tokens(owner, agent_id), to: Token.Manager, as: :list_api_tokens
+  defdelegate get_agent_with_api_tokens(owner, agent_id), to: Token.Manager
 
   defdelegate revoke_agent_api_token(owner, agent_id, token_id),
     to: Token.Manager,
     as: :revoke_api_token
 
-  defdelegate verify_api_token(client_id, client_secret, context), to: Token.Manager
+  defdelegate verify_api_token(client_id, client_secret), to: Token.Manager
 end

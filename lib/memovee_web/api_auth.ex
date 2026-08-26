@@ -15,7 +15,7 @@ defmodule MemoveeWeb.ApiAuth do
   def call(conn, _opts) do
     with [authorization] <- get_req_header(conn, "authorization"),
          [_, client_id, client_secret] <- Regex.run(@bearer_pattern, authorization),
-         {:ok, actor} <- Accounts.verify_api_token(client_id, client_secret, "api") do
+         {:ok, actor} <- Accounts.verify_api_token(client_id, client_secret) do
       assign(conn, :current_scope, Scope.for_actor(actor))
     else
       _ -> unauthorized(conn)

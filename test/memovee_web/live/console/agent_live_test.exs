@@ -4,7 +4,8 @@ defmodule MemoveeWeb.Console.AgentLiveTest do
   import Phoenix.LiveViewTest
   import Memovee.AccountsFixtures
 
-  alias Memovee.Accounts.{Agent, Relationship, Token}
+  alias Memovee.Accounts
+  alias Memovee.Accounts.{Actor, Agent, Relationship, Token}
   alias Memovee.Repo
 
   setup :register_and_log_in_user
@@ -54,6 +55,7 @@ defmodule MemoveeWeb.Console.AgentLiveTest do
 
     stored = Repo.get_by!(Token, actor_id: agent.id, context: "api")
     refute stored.token == plaintext_secret
+    assert has_element?(view, "#tokens-#{stored.id}")
 
     {:ok, reconnected_view, reconnected_html} =
       live(conn, ~p"/console/agents/#{agent.id}")
@@ -75,6 +77,66 @@ defmodule MemoveeWeb.Console.AgentLiveTest do
 
     assert Repo.get!(Token, credential.client_id).revoked_at
     refute has_element?(view, "#revoke-token-#{credential.client_id}")
+  end
+
+  test "deactivates and reactivates an owned agent", %{conn: conn, scope: scope} do
+    agent = agent_fixture(scope.actor)
+    {:ok, view, _html} = live(conn, ~p"/console/agents/#{agent.id}")
+
+    view
+    |> element("#deactivate-agent-button")
+    |> render_click()
+
+    assert Repo.get!(Actor, agent.id).current_state == "inactive"
+    assert has_element?(view, "#activate-agent-button")
+
+    view
+    |> element("#activate-agent-button")
+    |> render_click()
+
+    assert Repo.get!(Actor, agent.id).current_state == "active"
+    assert has_element?(view, "#deactivate-agent-button")
+  end
+
+  test "a stale LiveView cannot reactivate an agent after its owner is deactivated", %{
+    conn: conn,
+    scope: scope
+  } do
+    agent = agent_fixture(scope.actor)
+    credential = api_token_fixture(scope.actor, agent)
+
+    assert {:ok, %{resource: inactive_agent}} =
+             Agent.transition(scope.actor, agent.id, :deactivate)
+
+    assert inactive_agent.current_state == "inactive"
+
+    {:ok, view, _html} = live(conn, ~p"/console/agents/#{agent.id}")
+    transitioning_actor = user_fixture().actor
+
+    assert {:ok, %{resource: inactive_owner}} =
+             Accounts.transition_actor(scope.actor, transitioning_actor, :deactivate)
+
+    assert inactive_owner.current_state == "inactive"
+
+    view
+    |> element("#activate-agent-button")
+    |> render_click()
+
+    assert Repo.get!(Actor, agent.id).current_state == "inactive"
+    assert has_element?(view, "#activate-agent-button")
+
+    view
+    |> element("#revoke-token-#{credential.client_id}")
+    |> render_click()
+
+    refute Repo.get!(Token, credential.client_id).revoked_at
+    assert has_element?(view, "#revoke-token-#{credential.client_id}")
+
+    assert {:error, :unauthorized} =
+             Accounts.verify_api_token(
+               credential.client_id,
+               credential.client_secret
+             )
   end
 
   test "does not expose another owner's agent page", %{conn: conn} do

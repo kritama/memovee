@@ -48,23 +48,52 @@ defmodule Memovee.Accounts.Agent.Manager do
   end
 
   def get_owned(%Actor{id: owner_id}, agent_id) do
-    query =
-      from agent in Actor,
-        join: relationship in Relationship,
-        on:
-          relationship.target_actor_id == agent.id and relationship.actor_id == ^owner_id and
-            relationship.type == :owner,
-        join: owner in Actor,
-        on: owner.id == relationship.actor_id,
-        where:
-          agent.id == ^agent_id and agent.type == :agent and owner.type == :user and
-            owner.current_state == "active"
-
-    case Repo.one(query) do
-      %Actor{} = agent -> {:ok, agent}
+    case Repo.one(owned_query(owner_id, agent_id)) do
+      {%Actor{} = agent, %Actor{}} -> {:ok, agent}
       nil -> {:error, :not_found}
     end
   end
 
+  def transition(%Actor{id: owner_id}, agent_id, event) when is_atom(event) do
+    transition_owned(owner_id, agent_id, Atom.to_string(event))
+  end
+
   def change(%Actor{} = actor, attrs \\ %{}), do: Actor.agent_changeset(actor, attrs)
+
+  defp transition_owned(owner_id, agent_id, transition) do
+    Repo.transaction(fn ->
+      owner_id
+      |> owned_query(agent_id)
+      |> lock("FOR UPDATE")
+      |> Repo.one()
+      |> case do
+        {%Actor{} = agent, %Actor{} = owner} ->
+          perform_transition(agent, owner, transition)
+
+        nil ->
+          Repo.rollback(:not_found)
+      end
+    end)
+  end
+
+  defp perform_transition(agent, owner, transition) do
+    case Eventful.Transit.perform(agent, owner, transition) do
+      {:ok, result} -> result
+      {:error, reason} -> Repo.rollback(reason)
+    end
+  end
+
+  defp owned_query(owner_id, agent_id) do
+    from agent in Actor,
+      join: relationship in Relationship,
+      on:
+        relationship.target_actor_id == agent.id and relationship.actor_id == ^owner_id and
+          relationship.type == :owner,
+      join: owner in Actor,
+      on: owner.id == relationship.actor_id,
+      where:
+        agent.id == ^agent_id and agent.type == :agent and owner.type == :user and
+          owner.current_state == "active",
+      select: {agent, owner}
+  end
 end

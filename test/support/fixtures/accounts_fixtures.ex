@@ -66,7 +66,7 @@ defmodule Memovee.AccountsFixtures do
         expires_at: DateTime.utc_now(:microsecond) |> DateTime.add(30, :day)
       })
 
-    {:ok, credential} = Accounts.create_agent_api_token(owner, agent.id, attrs)
+    {:ok, %{credential: credential}} = Accounts.create_agent_api_token(owner, agent.id, attrs)
     credential
   end
 

@@ -36,9 +36,12 @@ defmodule Memovee.Accounts.Token.Manager do
          {:ok, credential} <- Repo.insert(changeset) do
       {:ok,
        %{
-         client_id: credential.id,
-         client_secret: client_secret,
-         expires_at: credential.expires_at
+         credential: %{
+           client_id: credential.id,
+           client_secret: client_secret,
+           expires_at: credential.expires_at
+         },
+         token: credential
        }}
     else
       {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
@@ -46,7 +49,7 @@ defmodule Memovee.Accounts.Token.Manager do
     end
   end
 
-  def list_api_tokens(%Actor{} = owner, agent_id) do
+  def get_agent_with_api_tokens(%Actor{} = owner, agent_id) do
     with {:ok, agent} <- Agent.get_owned(owner, agent_id) do
       tokens =
         from(credential in Token,
@@ -55,7 +58,7 @@ defmodule Memovee.Accounts.Token.Manager do
         )
         |> Repo.all()
 
-      {:ok, tokens}
+      {:ok, %{agent: agent, tokens: tokens}}
     end
   end
 
@@ -63,22 +66,18 @@ defmodule Memovee.Accounts.Token.Manager do
     now = DateTime.utc_now(:microsecond)
 
     query =
-      from credential in Token,
-        join: relationship in Relationship,
-        on:
-          relationship.target_actor_id == credential.actor_id and
-            relationship.actor_id == ^owner_id and relationship.type == :owner,
-        where:
-          credential.id == ^token_id and credential.actor_id == ^agent_id and
-            credential.context == @api_context and is_nil(credential.revoked_at)
+      owner_id
+      |> owned_api_token_query(agent_id)
+      |> where([credential], credential.id == ^token_id and is_nil(credential.revoked_at))
+      |> select([credential], credential)
 
     case Repo.update_all(query, set: [revoked_at: now]) do
-      {1, _} -> :ok
+      {1, [%Token{} = credential]} -> {:ok, credential}
       _ -> {:error, :not_found}
     end
   end
 
-  def verify_api_token(client_id, client_secret, @api_context)
+  def verify_api_token(client_id, client_secret)
       when is_binary(client_id) and is_binary(client_secret) do
     with {:ok, token_id} <- Ecto.UUID.cast(client_id),
          {:ok, secret} <- Base.url_decode64(client_secret, padding: false),
@@ -96,7 +95,20 @@ defmodule Memovee.Accounts.Token.Manager do
     end
   end
 
-  def verify_api_token(_client_id, _client_secret, _context), do: {:error, :unauthorized}
+  def verify_api_token(_client_id, _client_secret), do: {:error, :unauthorized}
+
+  defp owned_api_token_query(owner_id, agent_id) do
+    from credential in Token,
+      join: relationship in Relationship,
+      on:
+        relationship.target_actor_id == credential.actor_id and
+          relationship.actor_id == ^owner_id and relationship.type == :owner,
+      join: owner in Actor,
+      on: owner.id == relationship.actor_id,
+      where:
+        credential.actor_id == ^agent_id and credential.context == @api_context and
+          owner.type == :user and owner.current_state == "active"
+  end
 
   defp active_api_credential(token_id) do
     now = DateTime.utc_now(:microsecond)

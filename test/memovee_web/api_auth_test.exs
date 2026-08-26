@@ -72,7 +72,8 @@ defmodule MemoveeWeb.ApiAuthTest do
     agent: agent,
     credential: credential
   } do
-    assert {:ok, %{resource: _inactive_agent}} = Accounts.deactivate_actor(agent, owner)
+    assert {:ok, %{resource: _inactive_agent}} =
+             Accounts.transition_actor(agent, owner, :deactivate)
 
     conn =
       conn

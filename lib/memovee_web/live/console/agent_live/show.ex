@@ -10,15 +10,15 @@ defmodule MemoveeWeb.Console.AgentLive.Show do
   def mount(%{"id" => agent_id}, _session, socket) do
     owner = socket.assigns.current_scope.actor
 
-    with {:ok, agent} <- Agent.get_owned(owner, agent_id),
-         {:ok, tokens} <- Accounts.list_agent_api_tokens(owner, agent_id) do
-      {:ok,
-       socket
-       |> assign(:agent, agent)
-       |> assign(:credential, nil)
-       |> assign(:token_form, token_form())
-       |> stream(:tokens, tokens), temporary_assigns: [credential: nil]}
-    else
+    case Accounts.get_agent_with_api_tokens(owner, agent_id) do
+      {:ok, %{agent: agent, tokens: tokens}} ->
+        {:ok,
+         socket
+         |> assign(:agent, agent)
+         |> assign(:credential, nil)
+         |> assign(:token_form, token_form())
+         |> stream(:tokens, tokens), temporary_assigns: [credential: nil]}
+
       _ ->
         {:ok,
          socket
@@ -229,22 +229,17 @@ defmodule MemoveeWeb.Console.AgentLive.Show do
   @impl true
   def handle_event("create_token", %{"token" => params}, socket) do
     with {:ok, attrs} <- api_token_attrs(params),
-         {:ok, credential} <-
+         {:ok, %{credential: credential, token: token}} <-
            Accounts.create_agent_api_token(
              socket.assigns.current_scope.actor,
              socket.assigns.agent.id,
              attrs
-           ),
-         {:ok, tokens} <-
-           Accounts.list_agent_api_tokens(
-             socket.assigns.current_scope.actor,
-             socket.assigns.agent.id
            ) do
       {:noreply,
        socket
        |> assign(:credential, credential)
        |> assign(:token_form, token_form())
-       |> stream(:tokens, tokens, reset: true)}
+       |> stream_insert(:tokens, token, at: 0)}
     else
       _ -> {:noreply, put_flash(socket, :error, "Credential could not be created.")}
     end
@@ -254,14 +249,15 @@ defmodule MemoveeWeb.Console.AgentLive.Show do
     owner = socket.assigns.current_scope.actor
     agent = socket.assigns.agent
 
-    with :ok <- Accounts.revoke_agent_api_token(owner, agent.id, token_id),
-         {:ok, tokens} <- Accounts.list_agent_api_tokens(owner, agent.id) do
-      {:noreply,
-       socket
-       |> put_flash(:info, "Credential revoked.")
-       |> stream(:tokens, tokens, reset: true)}
-    else
-      _ -> {:noreply, put_flash(socket, :error, "Credential could not be revoked.")}
+    case Accounts.revoke_agent_api_token(owner, agent.id, token_id) do
+      {:ok, token} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Credential revoked.")
+         |> stream_insert(:tokens, token)}
+
+      _ ->
+        {:noreply, put_flash(socket, :error, "Credential could not be revoked.")}
     end
   end
 
@@ -276,12 +272,7 @@ defmodule MemoveeWeb.Console.AgentLive.Show do
   defp transition_agent(socket, transition) do
     agent = socket.assigns.agent
     owner = socket.assigns.current_scope.actor
-
-    result =
-      case transition do
-        :activate -> Accounts.activate_actor(agent, owner)
-        :deactivate -> Accounts.deactivate_actor(agent, owner)
-      end
+    result = Agent.transition(owner, agent.id, transition)
 
     case result do
       {:ok, %{resource: updated_agent}} -> {:noreply, assign(socket, :agent, updated_agent)}

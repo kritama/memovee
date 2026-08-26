@@ -29,11 +29,6 @@ defmodule Memovee.Accounts.Actor do
   end
 
   @doc false
-  def changeset(actor, attrs \\ %{}) do
-    cast(actor, attrs, [])
-  end
-
-  @doc false
   def user_changeset(actor) do
     actor
     |> cast(%{}, [])

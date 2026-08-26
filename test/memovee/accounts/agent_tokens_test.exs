@@ -53,7 +53,7 @@ defmodule Memovee.Accounts.AgentTokensTest do
       assert Accounts.get_user_by_magic_link_token(magic_token)
 
       assert {:ok, %{resource: _inactive_actor}} =
-               Accounts.deactivate_actor(user.actor, transitioning_actor)
+               Accounts.transition_actor(user.actor, transitioning_actor, :deactivate)
 
       refute Accounts.get_user_by_session_token(session_token)
       refute Accounts.get_user_by_magic_link_token(magic_token)
@@ -108,7 +108,7 @@ defmodule Memovee.Accounts.AgentTokensTest do
       assert "has already been taken" in errors_on(changeset).identifier
 
       assert {:ok, %{resource: inactive_owner}} =
-               Accounts.deactivate_actor(owner, other_owner)
+               Accounts.transition_actor(owner, other_owner, :deactivate)
 
       assert {:error, :unauthorized} =
                Agent.create(inactive_owner, %{identifier: "another-worker"})
@@ -141,7 +141,10 @@ defmodule Memovee.Accounts.AgentTokensTest do
       assert stored.token == :crypto.hash(:sha256, decoded_secret)
       refute stored.token == first.client_secret
 
-      assert {:ok, tokens} = Accounts.list_agent_api_tokens(owner, agent.id)
+      assert {:ok, %{agent: owned_agent, tokens: tokens}} =
+               Accounts.get_agent_with_api_tokens(owner, agent.id)
+
+      assert owned_agent.id == agent.id
 
       assert Enum.map(tokens, & &1.id) |> Enum.sort() ==
                [first.client_id, second.client_id] |> Enum.sort()
@@ -155,7 +158,7 @@ defmodule Memovee.Accounts.AgentTokensTest do
       token_count = Repo.aggregate(Token, :count)
 
       assert {:ok, %{resource: _inactive_owner}} =
-               Accounts.deactivate_actor(owner, transitioning_actor)
+               Accounts.transition_actor(owner, transitioning_actor, :deactivate)
 
       assert {:error, :not_found} =
                Accounts.create_agent_api_token(owner, agent.id, %{
@@ -166,14 +169,29 @@ defmodule Memovee.Accounts.AgentTokensTest do
       assert Repo.aggregate(Token, :count) == token_count
     end
 
+    test "does not revoke credentials for a deactivated owner using a stale Actor", %{
+      owner: owner,
+      agent: agent
+    } do
+      credential = api_token_fixture(owner, agent)
+      transitioning_actor = user_fixture().actor
+
+      assert {:ok, %{resource: _inactive_owner}} =
+               Accounts.transition_actor(owner, transitioning_actor, :deactivate)
+
+      assert {:error, :not_found} =
+               Accounts.revoke_agent_api_token(owner, agent.id, credential.client_id)
+
+      refute Repo.get!(Token, credential.client_id).revoked_at
+    end
+
     test "verifies a valid secret and updates last use", %{owner: owner, agent: agent} do
       credential = api_token_fixture(owner, agent)
 
       assert {:ok, authenticated_actor} =
                Accounts.verify_api_token(
                  credential.client_id,
-                 credential.client_secret,
-                 "api"
+                 credential.client_secret
                )
 
       assert authenticated_actor.id == agent.id
@@ -187,20 +205,12 @@ defmodule Memovee.Accounts.AgentTokensTest do
          } do
       credential = api_token_fixture(owner, agent)
 
-      assert {:error, :unauthorized} = Accounts.verify_api_token("bad", "bad", "api")
+      assert {:error, :unauthorized} = Accounts.verify_api_token("bad", "bad")
 
       assert {:error, :unauthorized} =
                Accounts.verify_api_token(
                  credential.client_id,
-                 Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false),
-                 "api"
-               )
-
-      assert {:error, :unauthorized} =
-               Accounts.verify_api_token(
-                 credential.client_id,
-                 credential.client_secret,
-                 "other"
+                 Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
                )
 
       token = Repo.get!(Token, credential.client_id)
@@ -212,18 +222,20 @@ defmodule Memovee.Accounts.AgentTokensTest do
       assert {:error, :unauthorized} =
                Accounts.verify_api_token(
                  credential.client_id,
-                 credential.client_secret,
-                 "api"
+                 credential.client_secret
                )
 
       replacement = api_token_fixture(owner, agent)
-      assert :ok = Accounts.revoke_agent_api_token(owner, agent.id, replacement.client_id)
+
+      assert {:ok, revoked_token} =
+               Accounts.revoke_agent_api_token(owner, agent.id, replacement.client_id)
+
+      assert revoked_token.revoked_at
 
       assert {:error, :unauthorized} =
                Accounts.verify_api_token(
                  replacement.client_id,
-                 replacement.client_secret,
-                 "api"
+                 replacement.client_secret
                )
     end
 
@@ -245,18 +257,18 @@ defmodule Memovee.Accounts.AgentTokensTest do
       assert {:error, :unauthorized} =
                Accounts.verify_api_token(
                  human_token.id,
-                 Base.url_encode64(secret, padding: false),
-                 "api"
+                 Base.url_encode64(secret, padding: false)
                )
 
       credential = api_token_fixture(owner, agent)
-      assert {:ok, %{resource: _inactive_agent}} = Accounts.deactivate_actor(agent, owner)
+
+      assert {:ok, %{resource: _inactive_agent}} =
+               Accounts.transition_actor(agent, owner, :deactivate)
 
       assert {:error, :unauthorized} =
                Accounts.verify_api_token(
                  credential.client_id,
-                 credential.client_secret,
-                 "api"
+                 credential.client_secret
                )
     end
 
@@ -267,7 +279,7 @@ defmodule Memovee.Accounts.AgentTokensTest do
       unrelated = user_fixture().actor
       credential = api_token_fixture(owner, agent)
 
-      assert {:error, :not_found} = Accounts.list_agent_api_tokens(unrelated, agent.id)
+      assert {:error, :not_found} = Accounts.get_agent_with_api_tokens(unrelated, agent.id)
 
       assert {:error, :not_found} =
                Accounts.create_agent_api_token(unrelated, agent.id, %{
@@ -286,16 +298,18 @@ defmodule Memovee.Accounts.AgentTokensTest do
       old = api_token_fixture(owner, agent, %{label: "old"})
       replacement = api_token_fixture(owner, agent, %{label: "replacement"})
 
-      assert :ok = Accounts.revoke_agent_api_token(owner, agent.id, old.client_id)
+      assert {:ok, revoked_token} =
+               Accounts.revoke_agent_api_token(owner, agent.id, old.client_id)
+
+      assert revoked_token.revoked_at
 
       assert {:error, :unauthorized} =
-               Accounts.verify_api_token(old.client_id, old.client_secret, "api")
+               Accounts.verify_api_token(old.client_id, old.client_secret)
 
       assert {:ok, %{id: agent_id}} =
                Accounts.verify_api_token(
                  replacement.client_id,
-                 replacement.client_secret,
-                 "api"
+                 replacement.client_secret
                )
 
       assert agent_id == agent.id

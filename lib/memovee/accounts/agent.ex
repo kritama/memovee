@@ -10,5 +10,6 @@ defmodule Memovee.Accounts.Agent do
   defdelegate create(owner, attrs), to: Manager
   defdelegate list_owned(owner), to: Manager
   defdelegate get_owned(owner, id), to: Manager
+  defdelegate transition(owner, id, event), to: Manager
   defdelegate change(actor, attrs \\ %{}), to: Manager
 end
