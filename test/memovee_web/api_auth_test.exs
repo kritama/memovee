@@ -4,6 +4,7 @@ defmodule MemoveeWeb.ApiAuthTest do
   import Memovee.AccountsFixtures
 
   alias Memovee.Accounts
+  alias MemoveeWeb.ApiAuth
 
   setup do
     owner = user_fixture().actor
@@ -21,18 +22,9 @@ defmodule MemoveeWeb.ApiAuthTest do
     conn =
       conn
       |> put_req_header("authorization", bearer(credential))
-      |> get(~p"/api/principal")
+      |> ApiAuth.call([])
 
-    assert %{
-             "data" => %{
-               "id" => id,
-               "identifier" => identifier,
-               "type" => "agent"
-             }
-           } = json_response(conn, 200)
-
-    assert id == agent.id
-    assert identifier == agent.identifier
+    refute conn.halted
     assert conn.assigns.current_scope.actor.id == agent.id
     assert is_nil(conn.assigns.current_scope.user)
   end
@@ -58,9 +50,10 @@ defmodule MemoveeWeb.ApiAuthTest do
             conn
           end
 
-        request_conn
-        |> get(~p"/api/principal")
-        |> json_response(401)
+        response = ApiAuth.call(request_conn, [])
+
+        assert response.halted
+        json_response(response, 401)
       end)
 
     assert Enum.uniq(responses) == [%{"error" => "unauthorized"}]
@@ -78,8 +71,9 @@ defmodule MemoveeWeb.ApiAuthTest do
     conn =
       conn
       |> put_req_header("authorization", bearer(credential))
-      |> get(~p"/api/principal")
+      |> ApiAuth.call([])
 
+    assert conn.halted
     assert json_response(conn, 401) == %{"error" => "unauthorized"}
   end
 
