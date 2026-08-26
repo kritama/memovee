@@ -1,4 +1,4 @@
-defmodule MemoveeWeb.AgentLive.Show do
+defmodule MemoveeWeb.Console.AgentLive.Show do
   use MemoveeWeb, :live_view
 
   alias Memovee.Accounts
@@ -22,7 +22,7 @@ defmodule MemoveeWeb.AgentLive.Show do
         {:ok,
          socket
          |> put_flash(:error, "Agent was not found.")
-         |> push_navigate(to: ~p"/agents")}
+         |> push_navigate(to: ~p"/console/agents")}
     end
   end
 
@@ -34,7 +34,7 @@ defmodule MemoveeWeb.AgentLive.Show do
         <div>
           <.link
             id="back-to-agents-link"
-            navigate={~p"/agents"}
+            navigate={~p"/console/agents"}
             class="mb-5 inline-flex items-center gap-2 text-sm font-medium text-slate-600 transition hover:text-slate-950"
           >
             <.icon name="hero-arrow-left" class="size-4" /> Back to agents

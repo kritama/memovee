@@ -1,4 +1,4 @@
-defmodule MemoveeWeb.AgentLive.New do
+defmodule MemoveeWeb.Console.AgentLive.New do
   use MemoveeWeb, :live_view
 
   alias Memovee.Accounts
@@ -17,7 +17,7 @@ defmodule MemoveeWeb.AgentLive.New do
       <section id="new-agent" class="mx-auto max-w-xl">
         <.link
           id="back-to-agents-link"
-          navigate={~p"/agents"}
+          navigate={~p"/console/agents"}
           class="mb-6 inline-flex items-center gap-2 text-sm font-medium text-slate-600 transition hover:text-slate-950"
         >
           <.icon name="hero-arrow-left" class="size-4" /> Back to agents
@@ -80,7 +80,7 @@ defmodule MemoveeWeb.AgentLive.New do
         {:noreply,
          socket
          |> put_flash(:info, "Agent created. You can now issue its first credential.")
-         |> push_navigate(to: ~p"/agents/#{agent.id}")}
+         |> push_navigate(to: ~p"/console/agents/#{agent.id}")}
 
       {:error, %Ecto.Changeset{} = changeset} ->
         {:noreply, assign(socket, form: to_form(changeset, as: :agent, action: :insert))}

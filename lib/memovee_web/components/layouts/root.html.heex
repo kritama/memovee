@@ -44,7 +44,9 @@
     >
       <%= if @current_scope do %>
         <span class="hidden text-slate-500 sm:inline">{@current_scope.user.email}</span>
-        <.link href={~p"/agents"} class="font-medium transition hover:text-sky-800">Agents</.link>
+        <.link href={~p"/console/agents"} class="font-medium transition hover:text-sky-800">
+          Agents
+        </.link>
         <.link href={~p"/users/settings"} class="font-medium transition hover:text-sky-800">
           Settings
         </.link>

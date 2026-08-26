@@ -59,9 +59,9 @@ defmodule MemoveeWeb.Router do
       on_mount: [{MemoveeWeb.UserAuth, :require_authenticated}] do
       live "/users/settings", UserLive.Settings, :edit
       live "/users/settings/confirm-email/:token", UserLive.Settings, :confirm_email
-      live "/agents", AgentLive.Index, :index
-      live "/agents/new", AgentLive.New, :new
-      live "/agents/:id", AgentLive.Show, :show
+      live "/console/agents", Console.AgentLive.Index, :index
+      live "/console/agents/new", Console.AgentLive.New, :new
+      live "/console/agents/:id", Console.AgentLive.Show, :show
     end
 
     resources "/auth/password", Auth.PasswordController, only: [:update], singleton: true

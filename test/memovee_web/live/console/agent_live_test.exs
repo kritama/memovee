@@ -1,4 +1,4 @@
-defmodule MemoveeWeb.AgentLiveTest do
+defmodule MemoveeWeb.Console.AgentLiveTest do
   use MemoveeWeb.ConnCase, async: true
 
   import Phoenix.LiveViewTest
@@ -11,12 +11,12 @@ defmodule MemoveeWeb.AgentLiveTest do
   setup :register_and_log_in_user
 
   test "lists an empty state and creates an owned agent", %{conn: conn, scope: scope} do
-    {:ok, index_view, _html} = live(conn, ~p"/agents")
+    {:ok, index_view, _html} = live(conn, ~p"/console/agents")
     assert has_element?(index_view, "#agents-index")
     assert has_element?(index_view, "#agents-empty")
     assert has_element?(index_view, "#new-agent-link")
 
-    {:ok, new_view, _html} = live(conn, ~p"/agents/new")
+    {:ok, new_view, _html} = live(conn, ~p"/console/agents/new")
     assert has_element?(new_view, "#agent-form")
 
     new_view
@@ -24,7 +24,7 @@ defmodule MemoveeWeb.AgentLiveTest do
     |> render_submit()
 
     {path, _flash} = assert_redirect(new_view)
-    assert String.starts_with?(path, "/agents/")
+    assert String.starts_with?(path, "/console/agents/")
 
     [agent] = Accounts.list_owned_agents(scope.actor)
     assert agent.identifier == "release-runner"
@@ -36,7 +36,7 @@ defmodule MemoveeWeb.AgentLiveTest do
     scope: scope
   } do
     agent = agent_fixture(scope.actor)
-    {:ok, view, _html} = live(conn, ~p"/agents/#{agent.id}")
+    {:ok, view, _html} = live(conn, ~p"/console/agents/#{agent.id}")
 
     html =
       view
@@ -56,7 +56,9 @@ defmodule MemoveeWeb.AgentLiveTest do
     stored = Repo.get_by!(Token, actor_id: agent.id, context: "api")
     refute stored.token == plaintext_secret
 
-    {:ok, reconnected_view, reconnected_html} = live(conn, ~p"/agents/#{agent.id}")
+    {:ok, reconnected_view, reconnected_html} =
+      live(conn, ~p"/console/agents/#{agent.id}")
+
     refute reconnected_html =~ ~s(id="api-secret")
     refute reconnected_html =~ plaintext_secret
     assert has_element?(reconnected_view, "#tokens-#{stored.id}")
@@ -66,7 +68,7 @@ defmodule MemoveeWeb.AgentLiveTest do
   test "revokes a token from its stable row action", %{conn: conn, scope: scope} do
     agent = agent_fixture(scope.actor)
     credential = api_token_fixture(scope.actor, agent)
-    {:ok, view, _html} = live(conn, ~p"/agents/#{agent.id}")
+    {:ok, view, _html} = live(conn, ~p"/console/agents/#{agent.id}")
 
     view
     |> element("#revoke-token-#{credential.client_id}")
@@ -80,6 +82,7 @@ defmodule MemoveeWeb.AgentLiveTest do
     other_owner = user_fixture().actor
     agent = agent_fixture(other_owner)
 
-    assert {:error, {:live_redirect, %{to: "/agents"}}} = live(conn, ~p"/agents/#{agent.id}")
+    assert {:error, {:live_redirect, %{to: "/console/agents"}}} =
+             live(conn, ~p"/console/agents/#{agent.id}")
   end
 end
