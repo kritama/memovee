@@ -70,19 +70,6 @@ defmodule MemoveeWeb.UserLive.Settings do
   end
 
   @impl true
-  def mount(%{"token" => token}, _session, socket) do
-    socket =
-      case Accounts.update_user_email(socket.assigns.current_scope.user, token) do
-        {:ok, _user} ->
-          put_flash(socket, :info, "Email changed successfully.")
-
-        {:error, _} ->
-          put_flash(socket, :error, "Email change link is invalid or it has expired.")
-      end
-
-    {:ok, push_navigate(socket, to: ~p"/users/settings")}
-  end
-
   def mount(_params, _session, socket) do
     user = socket.assigns.current_scope.user
     email_changeset = Accounts.change_user_email(user, %{}, validate_unique: false)

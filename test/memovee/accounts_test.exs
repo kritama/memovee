@@ -146,11 +146,19 @@ defmodule Memovee.AccountsTest do
     end
 
     test "updates the email with a valid token", %{user: user, token: token, email: email} do
-      assert {:ok, %{email: ^email}} = Accounts.update_user_email(user, token)
+      session_token = Accounts.generate_user_session_token(user)
+
+      assert {:ok, {%{email: ^email}, expired_tokens}} =
+               Accounts.update_user_email(user, token)
+
+      assert Enum.map(expired_tokens, & &1.context) |> Enum.sort() ==
+               ["change:#{user.email}", "session"]
+
       changed_user = Repo.get!(User, user.id)
       assert changed_user.email != user.email
       assert changed_user.email == email
       refute Repo.get_by(Token, actor_id: user.actor_id)
+      refute Accounts.get_user_by_session_token(session_token)
     end
 
     test "does not update email with invalid token", %{user: user} do

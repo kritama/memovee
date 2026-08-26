@@ -169,6 +169,21 @@ defmodule Memovee.Accounts.AgentTokensTest do
       assert Repo.aggregate(Token, :count) == token_count
     end
 
+    test "does not issue credentials to an inactive agent", %{owner: owner, agent: agent} do
+      token_count = Repo.aggregate(Token, :count)
+
+      assert {:ok, %{resource: _inactive_agent}} =
+               Agent.transition(owner, agent.id, :deactivate)
+
+      assert {:error, :inactive_actor} =
+               Accounts.create_agent_api_token(owner, agent.id, %{
+                 label: "inactive-agent",
+                 expires_at: DateTime.utc_now(:microsecond) |> DateTime.add(1, :day)
+               })
+
+      assert Repo.aggregate(Token, :count) == token_count
+    end
+
     test "does not revoke credentials for a deactivated owner using a stale Actor", %{
       owner: owner,
       agent: agent

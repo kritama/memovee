@@ -32,7 +32,7 @@ defmodule Memovee.Accounts.Token.Manager do
 
   def create_api_token(%Actor{} = owner, agent_id, attrs) do
     with {:ok, agent} <- Agent.get_owned(owner, agent_id),
-         {client_secret, changeset} <- Token.build_api_token(agent, attrs),
+         {:ok, client_secret, changeset} <- Token.build_api_token(agent, attrs),
          {:ok, credential} <- Repo.insert(changeset) do
       {:ok,
        %{

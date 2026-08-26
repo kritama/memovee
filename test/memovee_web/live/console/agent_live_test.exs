@@ -79,6 +79,25 @@ defmodule MemoveeWeb.Console.AgentLiveTest do
     refute has_element?(view, "#revoke-token-#{credential.client_id}")
   end
 
+  test "rejects token creation when the agent became inactive after mount", %{
+    conn: conn,
+    scope: scope
+  } do
+    agent = agent_fixture(scope.actor)
+    {:ok, view, _html} = live(conn, ~p"/console/agents/#{agent.id}")
+    token_count = Repo.aggregate(Token, :count)
+
+    assert {:ok, %{resource: _inactive_agent}} =
+             Agent.transition(scope.actor, agent.id, :deactivate)
+
+    view
+    |> form("#token-form", token: %{label: "stale-view", expires_in_days: "90"})
+    |> render_submit()
+
+    assert has_element?(view, "#token-form")
+    assert Repo.aggregate(Token, :count) == token_count
+  end
+
   test "deactivates and reactivates an owned agent", %{conn: conn, scope: scope} do
     agent = agent_fixture(scope.actor)
     {:ok, view, _html} = live(conn, ~p"/console/agents/#{agent.id}")

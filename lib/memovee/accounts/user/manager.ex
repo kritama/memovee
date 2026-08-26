@@ -59,10 +59,9 @@ defmodule Memovee.Accounts.User.Manager do
       with {:ok, query} <- Token.verify_change_email_token_query(encoded_token, context),
            {%Token{sent_to: email, actor_id: actor_id}, %Actor{id: actor_id}} <- Repo.one(query),
            ^actor_id <- user.actor_id,
-           {:ok, updated_user} <- Repo.update(User.email_changeset(user, %{email: email})),
-           {_count, _result} <-
-             Repo.delete_all(from(Token, where: [actor_id: ^actor_id, context: ^context])) do
-        {:ok, %{updated_user | actor: user.actor}}
+           {:ok, updated_user} <- Repo.update(User.email_changeset(user, %{email: email})) do
+        tokens_to_expire = delete_all_tokens(actor_id)
+        {:ok, {%{updated_user | actor: user.actor}, tokens_to_expire}}
       else
         _ -> {:error, :transaction_aborted}
       end
@@ -144,13 +143,18 @@ defmodule Memovee.Accounts.User.Manager do
   defp update_user_and_delete_all_tokens(changeset) do
     Repo.transact(fn ->
       with {:ok, user} <- Repo.update(changeset) do
-        tokens_to_expire = Repo.all_by(Token, actor_id: user.actor_id)
-        token_ids = Enum.map(tokens_to_expire, & &1.id)
-
-        Repo.delete_all(from credential in Token, where: credential.id in ^token_ids)
-
+        tokens_to_expire = delete_all_tokens(user.actor_id)
         {:ok, {%{user | actor: changeset.data.actor}, tokens_to_expire}}
       end
     end)
+  end
+
+  defp delete_all_tokens(actor_id) do
+    {_count, tokens} =
+      Repo.delete_all(
+        from credential in Token, where: credential.actor_id == ^actor_id, select: credential
+      )
+
+    tokens
   end
 end

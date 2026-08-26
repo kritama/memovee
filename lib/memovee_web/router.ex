@@ -58,11 +58,12 @@ defmodule MemoveeWeb.Router do
     live_session :require_authenticated_user,
       on_mount: [{MemoveeWeb.UserAuth, :require_authenticated}] do
       live "/users/settings", UserLive.Settings, :edit
-      live "/users/settings/confirm-email/:token", UserLive.Settings, :confirm_email
       live "/console/agents", Console.AgentLive.Index, :index
       live "/console/agents/new", Console.AgentLive.New, :new
       live "/console/agents/:id", Console.AgentLive.Show, :show
     end
+
+    get "/users/settings/confirm-email/:token", Email.ConfirmationController, :show
   end
 
   scope "/", MemoveeWeb do

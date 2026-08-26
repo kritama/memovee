@@ -124,7 +124,7 @@ defmodule Memovee.Accounts.Token do
       |> validate_expiry()
       |> unique_constraint([:context, :token])
 
-    {encoded_secret, changeset}
+    {:ok, encoded_secret, changeset}
   end
 
   def build_api_token(%Actor{}, _attrs), do: {:error, :inactive_actor}
