@@ -1,5 +1,5 @@
 defmodule MemoveeWeb.UserLive.SettingsTest do
-  use MemoveeWeb.ConnCase, async: true
+  use MemoveeWeb.ConnCase, async: false
 
   alias Memovee.Accounts
   import Phoenix.LiveViewTest
@@ -57,6 +57,30 @@ defmodule MemoveeWeb.UserLive.SettingsTest do
 
       assert result =~ "A link to confirm your email"
       assert Accounts.get_user_by_email(user.email)
+    end
+
+    test "shows an error when the confirmation email cannot be delivered", %{conn: conn} do
+      mailer_config = Application.fetch_env!(:memovee, Memovee.Mailer)
+
+      Application.put_env(
+        :memovee,
+        Memovee.Mailer,
+        Keyword.put(mailer_config, :adapter, Memovee.Test.FailingMailerAdapter)
+      )
+
+      on_exit(fn -> Application.put_env(:memovee, Memovee.Mailer, mailer_config) end)
+
+      {:ok, lv, _html} = live(conn, ~p"/users/settings")
+
+      result =
+        lv
+        |> form("#email_form", %{
+          "user" => %{"email" => unique_user_email()}
+        })
+        |> render_submit()
+
+      assert result =~ "The confirmation email could not be sent. Please try again."
+      refute result =~ "A link to confirm your email change has been sent"
     end
 
     test "renders errors with invalid data (phx-change)", %{conn: conn} do

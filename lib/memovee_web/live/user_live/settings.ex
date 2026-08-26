@@ -118,14 +118,19 @@ defmodule MemoveeWeb.UserLive.Settings do
 
     case Accounts.change_user_email(user, user_params) do
       %{valid?: true} = changeset ->
-        Accounts.deliver_user_update_email_instructions(
-          Ecto.Changeset.apply_action!(changeset, :insert),
-          user.email,
-          &url(~p"/users/settings/confirm-email/#{&1}")
-        )
+        case Accounts.deliver_user_update_email_instructions(
+               Ecto.Changeset.apply_action!(changeset, :insert),
+               user.email,
+               &url(~p"/users/settings/confirm-email/#{&1}")
+             ) do
+          {:ok, _email} ->
+            info = "A link to confirm your email change has been sent to the new address."
+            {:noreply, put_flash(socket, :info, info)}
 
-        info = "A link to confirm your email change has been sent to the new address."
-        {:noreply, socket |> put_flash(:info, info)}
+          {:error, _reason} ->
+            error = "The confirmation email could not be sent. Please try again."
+            {:noreply, put_flash(socket, :error, error)}
+        end
 
       changeset ->
         {:noreply, assign(socket, :email_form, to_form(changeset, action: :insert))}

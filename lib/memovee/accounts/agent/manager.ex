@@ -54,7 +54,11 @@ defmodule Memovee.Accounts.Agent.Manager do
         on:
           relationship.target_actor_id == agent.id and relationship.actor_id == ^owner_id and
             relationship.type == :owner,
-        where: agent.id == ^agent_id and agent.type == :agent
+        join: owner in Actor,
+        on: owner.id == relationship.actor_id,
+        where:
+          agent.id == ^agent_id and agent.type == :agent and owner.type == :user and
+            owner.current_state == "active"
 
     case Repo.one(query) do
       %Actor{} = agent -> {:ok, agent}

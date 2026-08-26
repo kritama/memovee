@@ -147,6 +147,25 @@ defmodule Memovee.Accounts.AgentTokensTest do
                [first.client_id, second.client_id] |> Enum.sort()
     end
 
+    test "does not issue credentials to a deactivated owner using a stale Actor", %{
+      owner: owner,
+      agent: agent
+    } do
+      transitioning_actor = user_fixture().actor
+      token_count = Repo.aggregate(Token, :count)
+
+      assert {:ok, %{resource: _inactive_owner}} =
+               Accounts.deactivate_actor(owner, transitioning_actor)
+
+      assert {:error, :not_found} =
+               Accounts.create_agent_api_token(owner, agent.id, %{
+                 label: "stale-session",
+                 expires_at: DateTime.utc_now(:microsecond) |> DateTime.add(1, :day)
+               })
+
+      assert Repo.aggregate(Token, :count) == token_count
+    end
+
     test "verifies a valid secret and updates last use", %{owner: owner, agent: agent} do
       credential = api_token_fixture(owner, agent)
 
