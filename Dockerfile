@@ -1,10 +1,6 @@
-FROM elixir:1.20.3-otp-29-slim AS build
+FROM alpine:3.24 AS build
 
-ARG DEBIAN_FRONTEND=noninteractive
-
-RUN apt-get update && \
-    apt-get install --yes --no-install-recommends build-essential ca-certificates git && \
-    rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache build-base ca-certificates elixir erlang-dev git
 
 WORKDIR /app
 
@@ -31,15 +27,11 @@ COPY rel rel/
 
 RUN mix release
 
-FROM debian:trixie-slim
+FROM alpine:3.24 AS runtime
 
-ARG DEBIAN_FRONTEND=noninteractive
-
-RUN apt-get update && \
-    apt-get install --yes --no-install-recommends ca-certificates curl libncurses6 libsctp1 libstdc++6 openssl && \
-    rm -rf /var/lib/apt/lists/* && \
-    groupadd --system --gid 1001 memovee && \
-    useradd --system --uid 1001 --gid memovee --home-dir /app --create-home memovee
+RUN apk add --no-cache ca-certificates curl libstdc++ ncurses-libs openssl && \
+    addgroup -g 1001 -S memovee && \
+    adduser -S memovee -u 1001 -G memovee -h /app
 
 WORKDIR /app
 
@@ -56,5 +48,7 @@ ENV PORT=4000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -f http://localhost:$PORT/ || exit 1
+
+FROM runtime AS server
 
 CMD ["bin/docker-entrypoint"]

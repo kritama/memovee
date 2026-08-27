@@ -8,9 +8,9 @@ on:
 jobs:
   test:
     name: Run Tests
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     container:
-      image: elixir:1.20.3-otp-29
+      image: alpine:3.24
     env:
       DATABASE_HOST: postgres
       DATABASE_PORT: 5432
@@ -35,27 +35,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install CI Tools
-        run: |
-          apt-get update
-          apt-get install --yes --no-install-recommends zstd
-          mix local.hex --force
-          mix local.rebar --force
-
-      - name: Retrieve Cached Dependencies
-        uses: actions/cache@v5
+      - name: Set Up Project
+        uses: ./.github/actions/setup-project
         with:
-          path: |
-            deps
-            _build
-          key: ${{ runner.os }}-debian-elixir-image-release-${{ hashFiles('mise.toml') }}-${{ hashFiles('mix.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-debian-elixir-image-release-${{ hashFiles('mise.toml') }}-
-
-      - name: Install Dependencies
-        run: |
-          mix deps.get
-          mix compile --warnings-as-errors
+          cache-scope: release
 
       - name: Run Tests
         run: mix test --trace --slowest 10
