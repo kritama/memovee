@@ -122,6 +122,8 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
           tags: |
             type=ref,event=tag
             type=semver,pattern={{version}}
