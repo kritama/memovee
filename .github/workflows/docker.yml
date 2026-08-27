@@ -67,6 +67,56 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Determine mutable image aliases
+        id: aliases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          RELEASE_VERSION="${RELEASE_TAG#v}"
+
+          if ! [[ "$RELEASE_VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "::error::Release tag must use MAJOR.MINOR.PATCH format"
+            exit 1
+          fi
+
+          RELEASE_MAJOR="${BASH_REMATCH[1]}"
+          RELEASE_MINOR="${BASH_REMATCH[2]}"
+          UPDATE_MINOR=false
+          UPDATE_MAJOR=false
+          UPDATE_LATEST=false
+
+          if [ "$RELEASE_PRERELEASE" != "true" ]; then
+            RELEASE_TAGS=$(gh api --paginate \
+              "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+              --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name')
+
+            RELEASE_VERSIONS=$(printf '%s\n' "$RELEASE_TAGS" | \
+              sed 's/^v//' | \
+              grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' || true)
+            RELEASE_VERSIONS=$(printf '%s\n%s\n' "$RELEASE_VERSIONS" "$RELEASE_VERSION" | \
+              sed '/^$/d' | \
+              sort -Vu)
+
+            LATEST_MINOR=$(printf '%s\n' "$RELEASE_VERSIONS" | \
+              awk -F. -v major="$RELEASE_MAJOR" -v minor="$RELEASE_MINOR" \
+                '$1 == major && $2 == minor' | \
+              tail -n 1)
+            LATEST_MAJOR=$(printf '%s\n' "$RELEASE_VERSIONS" | \
+              awk -F. -v major="$RELEASE_MAJOR" '$1 == major' | \
+              tail -n 1)
+            LATEST_VERSION=$(printf '%s\n' "$RELEASE_VERSIONS" | tail -n 1)
+
+            [ "$RELEASE_VERSION" = "$LATEST_MINOR" ] && UPDATE_MINOR=true
+            [ "$RELEASE_VERSION" = "$LATEST_MAJOR" ] && UPDATE_MAJOR=true
+            [ "$RELEASE_VERSION" = "$LATEST_VERSION" ] && UPDATE_LATEST=true
+          fi
+
+          echo "update_minor=$UPDATE_MINOR" >> "$GITHUB_OUTPUT"
+          echo "update_major=$UPDATE_MAJOR" >> "$GITHUB_OUTPUT"
+          echo "update_latest=$UPDATE_LATEST" >> "$GITHUB_OUTPUT"
+
       - name: Extract image metadata
         id: meta
         uses: docker/metadata-action@v6
@@ -75,14 +125,19 @@ jobs:
           tags: |
             type=ref,event=tag
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest
+            type=semver,pattern={{major}}.{{minor}},enable=${{ steps.aliases.outputs.update_minor }}
+            type=semver,pattern={{major}},enable=${{ steps.aliases.outputs.update_major }}
+            type=raw,value=latest,enable=${{ steps.aliases.outputs.update_latest }}
 
       - name: Create and push multi-arch manifest
+        env:
+          MANIFEST_TAGS: ${{ steps.meta.outputs.tags }}
+          SOURCE_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          SOURCE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          for tag in $(echo '${{ steps.meta.outputs.tags }}' | tr '\n' ' '); do
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
             docker buildx imagetools create -t "$tag" \
-              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}-linux-amd64 \
-              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}-linux-arm64
-          done
+              "$SOURCE_IMAGE:$SOURCE_TAG-linux-amd64" \
+              "$SOURCE_IMAGE:$SOURCE_TAG-linux-arm64"
+          done <<< "$MANIFEST_TAGS"
