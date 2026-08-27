@@ -74,7 +74,6 @@ jobs:
           fetch-depth: 0
 
       - name: Generate changelog
-        id: changelog
         run: |
           PREV_TAG=$(git tag --sort=-version:refname | sed -n '2p')
           if [ -z "$PREV_TAG" ]; then
@@ -85,14 +84,11 @@ jobs:
           echo "" >> CHANGELOG.md
           git log "$PREV_TAG"..HEAD --pretty=format:"- %s (%h)" --no-merges >> CHANGELOG.md
 
-          CHANGELOG_JSON=$(jq -Rs . < CHANGELOG.md)
-          echo "changelog=${CHANGELOG_JSON}" >> "$GITHUB_OUTPUT"
-
       - name: Create Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "${{ github.ref_name }}" \
             --title "Release ${{ github.ref_name }}" \
-            --notes "${{ fromJSON(steps.changelog.outputs.changelog) }}" \
+            --notes-file CHANGELOG.md \
             --draft
