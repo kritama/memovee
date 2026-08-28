@@ -39,6 +39,21 @@ defmodule Memovee.OAuth.Grant.Manager do
 
   def revoke(%Grant{} = grant, %Actor{}), do: {:ok, grant}
 
+  def active_client_ids_query do
+    from grant in Grant,
+      where: grant.current_state == "active",
+      distinct: true,
+      select: %{client_id: grant.oauth_client_id}
+  end
+
+  def active_for_client?(client_id) do
+    Repo.exists?(
+      from(grant in Grant,
+        where: grant.oauth_client_id == ^client_id and grant.current_state == "active"
+      )
+    )
+  end
+
   defp replace(grant, actor, request) do
     with {:ok, _grant} <- revoke(grant, actor) do
       create(actor, request)

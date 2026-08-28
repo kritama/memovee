@@ -7,6 +7,7 @@ defmodule Memovee.OAuth.Authorization do
   alias Memovee.OAuth
   alias Memovee.OAuth.{Client, Code, Event, Grant, RateLimiter, Request}
   alias Memovee.OAuth.Grant.Manager, as: GrantManager
+  alias Memovee.OAuth.Request.Manager, as: RequestManager
   alias Memovee.OAuth.Tama.MCP
   alias Memovee.Repo
   alias TamaOAuth.{AuthorizationRequest, ClientMetadata, Crypto, Error}
@@ -21,7 +22,7 @@ defmodule Memovee.OAuth.Authorization do
          {:ok, metadata} <- Client.fetch(request.client_id),
          true <- ClientMetadata.redirect_allowed?(request.redirect_uri, metadata),
          {handle, digest} <- opaque_credential(),
-         {:ok, _persisted} <- persist_request(request, metadata, digest) do
+         {:ok, _persisted} <- RequestManager.create(request, metadata.metadata_digest, digest) do
       Event.emit(:authorization_started, %{client_id: request.client_id})
       {:ok, handle}
     else
@@ -42,7 +43,7 @@ defmodule Memovee.OAuth.Authorization do
 
   def consent(%Scope{actor: %Actor{} = actor}, handle) do
     with {:ok, actor} <- active_actor(actor.id),
-         {:ok, request} <- load_pending(handle),
+         {:ok, request} <- RequestManager.get_pending(handle),
          {:ok, metadata} <- Client.refresh(request.client_id),
          :ok <- validate_metadata(request, metadata) do
       {:ok,
@@ -70,8 +71,8 @@ defmodule Memovee.OAuth.Authorization do
   def deny(%Scope{actor: %Actor{id: actor_id}}, handle) do
     Repo.transact(fn ->
       with {:ok, actor} <- active_actor(actor_id, lock: true),
-           {:ok, request} <- load_pending(handle, lock: true),
-           {:ok, request} <- transition_request(request, actor, "deny") do
+           {:ok, request} <- RequestManager.get_pending(handle, lock: true),
+           {:ok, request} <- RequestManager.transition(request, actor, "deny") do
         Event.emit(:authorization_denied, %{client_id: request.client_id, actor_id: actor.id})
         {:ok, redirect_uri(request, %{"error" => "access_denied"})}
       end
@@ -82,13 +83,13 @@ defmodule Memovee.OAuth.Authorization do
 
   defp approve_transaction(actor_id, handle) do
     with {:ok, actor} <- active_actor(actor_id, lock: true),
-         {:ok, request} <- load_pending(handle, lock: true),
+         {:ok, request} <- RequestManager.get_pending(handle, lock: true),
          {:ok, metadata} <- Client.refresh(request.client_id),
          :ok <- validate_metadata(request, metadata),
          {:ok, grant} <- GrantManager.resolve_for_approval(actor, request),
          {raw_code, code_digest} <- opaque_credential(),
          {:ok, _code} <- create_code(grant, request, code_digest),
-         {:ok, request} <- transition_request(request, actor, "approve") do
+         {:ok, request} <- RequestManager.transition(request, actor, "approve") do
       Event.emit(:authorization_approved, %{
         client_id: request.client_id,
         grant_id: grant.id,
@@ -97,26 +98,6 @@ defmodule Memovee.OAuth.Authorization do
 
       {:ok, redirect_uri(request, %{"code" => raw_code})}
     end
-  end
-
-  defp persist_request(request, metadata, digest) do
-    expires_at =
-      OAuth.now()
-      |> DateTime.add(OAuth.config(:authorization_request_lifetime_seconds), :second)
-
-    %Request{}
-    |> Request.changeset(%{
-      handle_digest: digest,
-      client_id: request.client_id,
-      client_metadata_digest: metadata.metadata_digest,
-      redirect_uri: request.redirect_uri,
-      resource: request.resource,
-      scope: request.scope,
-      state: request.state,
-      code_challenge: request.code_challenge,
-      expires_at: expires_at
-    })
-    |> Repo.insert()
   end
 
   defp create_code(%Grant{} = grant, %Request{} = request, digest) do
@@ -135,28 +116,6 @@ defmodule Memovee.OAuth.Authorization do
     })
     |> Repo.insert()
   end
-
-  defp load_pending(handle, opts \\ [])
-
-  defp load_pending(handle, opts) when is_binary(handle) do
-    now = OAuth.now()
-    digest = Crypto.digest(handle)
-
-    query =
-      from request in Request,
-        where:
-          request.handle_digest == ^digest and request.current_state == "pending" and
-            request.expires_at > ^now
-
-    query = if opts[:lock], do: lock(query, "FOR UPDATE"), else: query
-
-    case Repo.one(query) do
-      %Request{} = request -> {:ok, request}
-      nil -> {:error, :invalid_request_handle}
-    end
-  end
-
-  defp load_pending(_handle, _opts), do: {:error, :invalid_request_handle}
 
   defp active_actor(id, opts \\ []) do
     query =
@@ -177,13 +136,6 @@ defmodule Memovee.OAuth.Authorization do
         ClientMetadata.redirect_allowed?(request.redirect_uri, metadata)
 
     if valid?, do: :ok, else: {:error, :client_metadata_changed}
-  end
-
-  defp transition_request(request, actor, event_name) do
-    case Eventful.Transit.perform(request, actor, event_name) do
-      {:ok, %{resource: transitioned}} -> {:ok, transitioned}
-      error -> error
-    end
   end
 
   defp redirect_uri(request, params) do
