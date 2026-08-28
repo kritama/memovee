@@ -5,7 +5,7 @@ defmodule Memovee.OAuth.Revocation do
 
   alias Memovee.Accounts.{Actor, Token}
   alias Memovee.OAuth
-  alias Memovee.OAuth.{Access, Client, Event, KeyProvider, RateLimiter}
+  alias Memovee.OAuth.{Access, Client, Event, Grant, KeyProvider, RateLimiter}
   alias Memovee.OAuth.Client.ReplayStore
   alias Memovee.OAuth.Grant.Manager, as: GrantManager
   alias Memovee.Repo
@@ -31,17 +31,17 @@ defmodule Memovee.OAuth.Revocation do
     do: {:error, Error.new(:invalid_request, stage: :revocation_request)}
 
   defp revoke_if_owned(raw_token, client_id) do
-    case token_grant_id(raw_token) do
-      {:ok, grant_id} -> revoke_grant(grant_id, client_id)
+    case token_grant_identity(raw_token) do
+      {:ok, {grant_id, actor_id}} -> revoke_grant(grant_id, actor_id, client_id)
       :unknown -> {:ok, TamaOAuth.Revocation.response()}
     end
   end
 
-  defp revoke_grant(grant_id, client_id) do
+  defp revoke_grant(grant_id, actor_id, client_id) do
     Repo.transact(fn ->
-      with {:ok, grant} <- GrantManager.lock(grant_id),
-           true <- grant.oauth_client_id == client_id,
-           %Actor{} = actor <- Repo.get(Actor, grant.actor_id),
+      with {:ok, %Actor{} = actor} <- lock_actor(actor_id),
+           {:ok, grant} <- GrantManager.lock(grant_id),
+           true <- grant.actor_id == actor.id and grant.oauth_client_id == client_id,
            {:ok, grant} <- GrantManager.revoke(grant, actor),
            :ok <- revoke_grant_tokens(grant.id) do
         Event.emit(:revoked, %{client_id: client_id, grant_id: grant.id, actor_id: actor.id})
@@ -52,7 +52,7 @@ defmodule Memovee.OAuth.Revocation do
     end)
   end
 
-  defp token_grant_id(raw_token) do
+  defp token_grant_identity(raw_token) do
     with {:ok, jwks} <- KeyProvider.public_jwks(),
          {:ok, claims} <-
            TamaOAuth.JWT.verify_access_token(raw_token, jwks,
@@ -62,40 +62,55 @@ defmodule Memovee.OAuth.Revocation do
              algorithms: [OAuth.config(:signing_algorithm)]
            ),
          {:ok, token_id} <- Ecto.UUID.cast(claims["jti"]),
-         grant_id when is_binary(grant_id) <- grant_id_for_token(token_id, "oauth_access") do
-      {:ok, grant_id}
+         {grant_id, actor_id} <- grant_identity_for_token(token_id, "oauth_access") do
+      {:ok, {grant_id, actor_id}}
     else
-      _error -> refresh_grant_id(raw_token)
+      _error -> refresh_grant_identity(raw_token)
     end
   end
 
-  defp refresh_grant_id(raw_token) do
+  defp refresh_grant_identity(raw_token) do
     digest = Token.oauth_token_digest(raw_token)
 
-    case grant_id_for_digest(digest) do
-      grant_id when is_binary(grant_id) -> {:ok, grant_id}
+    case grant_identity_for_digest(digest) do
+      {grant_id, actor_id} -> {:ok, {grant_id, actor_id}}
       nil -> :unknown
     end
   end
 
-  defp grant_id_for_token(token_id, context) do
+  defp grant_identity_for_token(token_id, context) do
     Repo.one(
       from token in Token,
         join: access in Access,
         on: access.actor_token_id == token.id,
+        join: grant in Grant,
+        on: grant.id == access.oauth_grant_id,
         where: token.id == ^token_id and token.context == ^context,
-        select: access.oauth_grant_id
+        select: {grant.id, grant.actor_id}
     )
   end
 
-  defp grant_id_for_digest(digest) do
+  defp grant_identity_for_digest(digest) do
     Repo.one(
       from token in Token,
         join: access in Access,
         on: access.actor_token_id == token.id,
+        join: grant in Grant,
+        on: grant.id == access.oauth_grant_id,
         where: token.token == ^digest and token.context == "oauth_refresh",
-        select: access.oauth_grant_id
+        select: {grant.id, grant.actor_id}
     )
+  end
+
+  defp lock_actor(actor_id) do
+    Actor
+    |> where([actor], actor.id == ^actor_id)
+    |> lock("FOR UPDATE")
+    |> Repo.one()
+    |> case do
+      %Actor{} = actor -> {:ok, actor}
+      nil -> {:error, :invalid_actor}
+    end
   end
 
   defp revoke_grant_tokens(grant_id) do

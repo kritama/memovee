@@ -1,6 +1,8 @@
 defmodule Memovee.OAuth.Client.Registration.Manager do
   @moduledoc "Creates and resolves bounded dynamic public-client registrations."
 
+  import Ecto.Query
+
   alias Memovee.OAuth
   alias Memovee.OAuth.Actor
   alias Memovee.OAuth.Client.Registration
@@ -22,11 +24,9 @@ defmodule Memovee.OAuth.Client.Registration.Manager do
   end
 
   def fetch(client_id) when is_binary(client_id) do
-    with {:ok, id} <- registration_id(client_id),
-         %Registration{current_state: "active"} = registration <- Repo.get(Registration, id) do
-      {:ok, metadata(registration, client_id)}
-    else
-      _ -> {:error, :invalid_client}
+    case registration_id(client_id) do
+      {:ok, id} -> fetch_registration(id, client_id)
+      _error -> {:error, :invalid_client}
     end
   end
 
@@ -37,6 +37,32 @@ defmodule Memovee.OAuth.Client.Registration.Manager do
     |> Registration.changeset(Map.from_struct(normalized))
     |> Repo.insert()
   end
+
+  defp fetch_registration(id, client_id) do
+    now = OAuth.now()
+    touch_interval = OAuth.config(:registration_touch_interval_seconds)
+    cutoff = DateTime.add(now, -touch_interval, :second)
+
+    touch_query =
+      from registration in Registration,
+        where:
+          registration.id == ^id and registration.current_state == "active" and
+            (is_nil(registration.last_used_at) or registration.last_used_at <= ^cutoff),
+        select: registration
+
+    case Repo.update_all(touch_query, set: [last_used_at: now]) do
+      {1, [registration]} ->
+        {:ok, metadata(registration, client_id)}
+
+      {0, []} ->
+        Registration
+        |> Repo.get_by(id: id, current_state: "active")
+        |> registration_result(client_id)
+    end
+  end
+
+  defp registration_result(nil, _client_id), do: {:error, :invalid_client}
+  defp registration_result(registration, client_id), do: {:ok, metadata(registration, client_id)}
 
   defp transition(registration, actor, event_name) do
     case Eventful.Transit.perform(registration, actor, event_name) do
