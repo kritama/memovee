@@ -72,6 +72,38 @@ defmodule MemoveeWeb.Auth.ConsentLive do
                   {@consent.client_name}
                 </dd>
 
+                <dt class={["font-medium"]}>Verification</dt>
+                <dd id="oauth-consent-client-verification" class={["sm:col-span-2"]}>
+                  <span class={[
+                    "badge badge-outline",
+                    if(@consent.verified_client_metadata?,
+                      do: "badge-success",
+                      else: "badge-warning"
+                    )
+                  ]}>
+                    {if(@consent.verified_client_metadata?,
+                      do: "Verified metadata",
+                      else: "Unverified metadata"
+                    )}
+                  </span>
+                </dd>
+
+                <dt :if={@consent.client_uri} class={["font-medium"]}>Website</dt>
+                <dd
+                  :if={@consent.client_uri}
+                  id="oauth-consent-client-uri"
+                  class={["break-all sm:col-span-2"]}
+                >
+                  <.link
+                    href={@consent.client_uri}
+                    target="_blank"
+                    rel="noreferrer"
+                    class={["link link-primary"]}
+                  >
+                    {@consent.client_uri}
+                  </.link>
+                </dd>
+
                 <dt class={["font-medium"]}>Callback</dt>
                 <dd id="oauth-consent-redirect-authority" class={["break-all sm:col-span-2"]}>
                   {@consent.redirect_authority}
@@ -84,9 +116,27 @@ defmodule MemoveeWeb.Auth.ConsentLive do
 
                 <dt class={["font-medium"]}>Permission</dt>
                 <dd id="oauth-consent-scopes" class={["sm:col-span-2"]}>
-                  <span class={["badge badge-primary badge-outline"]}>Send messages as you</span>
+                  Send messages to Tama for processing on your behalf.
                 </dd>
               </dl>
+
+              <div
+                :if={!@consent.verified_client_metadata? || @consent.loopback_redirect?}
+                id="oauth-consent-client-warning"
+                class={["alert alert-warning items-start"]}
+              >
+                <.icon name="hero-exclamation-triangle" class={["mt-0.5 size-5 shrink-0"]} />
+                <div class={["space-y-1"]}>
+                  <p :if={!@consent.verified_client_metadata?} id="oauth-consent-unverified-warning">
+                    Memovee could not independently verify this application's metadata. Only
+                    continue if you initiated this request and recognize the application.
+                  </p>
+                  <p :if={@consent.loopback_redirect?} id="oauth-consent-loopback-warning">
+                    This application will receive the authorization result on this device through a
+                    local callback.
+                  </p>
+                </div>
+              </div>
 
               <div class={["alert alert-warning"]}>
                 <.icon name="hero-shield-check" class={["size-5"]} />

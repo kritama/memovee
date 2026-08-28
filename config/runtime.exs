@@ -138,6 +138,18 @@ if config_env() == :prod do
     raise "MEMOVEE_OAUTH_PRIVATE_SIGNING_KEY must match the configured key ID and algorithm"
   end
 
+  case Memovee.OAuth.KeyProvider.validate_signing_key(
+         private_signing_key,
+         signing_algorithm,
+         signing_key_id
+       ) do
+    :ok ->
+      :ok
+
+    {:error, :invalid_signing_key} ->
+      raise "MEMOVEE_OAUTH_PRIVATE_SIGNING_KEY must contain private signing material"
+  end
+
   signing_keys =
     [private_signing_key | public_signing_keys]
     |> Enum.uniq_by(& &1["kid"])

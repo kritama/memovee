@@ -81,11 +81,17 @@ defmodule MemoveeWeb.Plugs.TrustedProxy do
   end
 
   defp contains?({width, network, prefix}, remote_ip) do
-    case encode(remote_ip) do
+    case encode_for_width(remote_ip, width) do
       {^width, address} -> address >>> (width - prefix) == network >>> (width - prefix)
       {_other_width, _address} -> false
     end
   end
+
+  defp encode_for_width({0, 0, 0, 0, 0, 0xFFFF, high, low}, 32) do
+    {32, high <<< 16 ||| low}
+  end
+
+  defp encode_for_width(remote_ip, _width), do: encode(remote_ip)
 
   defp encode({a, b, c, d}) do
     {32, a <<< 24 ||| b <<< 16 ||| c <<< 8 ||| d}

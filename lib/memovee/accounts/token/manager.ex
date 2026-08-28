@@ -7,7 +7,6 @@ defmodule Memovee.Accounts.Token.Manager do
 
   alias Memovee.Accounts.{Actor, Agent, Relationship, Token, User}
   alias Memovee.Accounts.Agent.Manager, as: AgentManager
-  alias Memovee.OAuth.Access
   alias Memovee.Repo
 
   @api_context "api"
@@ -111,14 +110,51 @@ defmodule Memovee.Accounts.Token.Manager do
     {:ok, deleted_count == batch_size}
   end
 
-  def delete_oauth_for_grant(grant_id) do
-    token_ids =
-      from(access in Access,
-        where: access.oauth_grant_id == ^grant_id,
-        select: access.actor_token_id
-      )
+  def issue_oauth_refresh(%Actor{} = actor, expires_at) do
+    {raw_token, reference} = Token.build_oauth_refresh_token(actor, expires_at)
 
-    Repo.delete_all(from token in Token, where: token.id in subquery(token_ids))
+    case Repo.insert(reference) do
+      {:ok, persisted} -> {:ok, raw_token, persisted}
+      error -> error
+    end
+  end
+
+  def issue_oauth_access(%Actor{} = actor, expires_at) do
+    actor
+    |> Token.build_oauth_access_reference(expires_at)
+    |> Repo.insert()
+  end
+
+  def lock_oauth_refresh(digest) when is_binary(digest) do
+    Token
+    |> where([token], token.context == "oauth_refresh" and token.token == ^digest)
+    |> lock("FOR UPDATE")
+    |> Repo.one()
+    |> case do
+      %Token{} = token -> {:ok, token}
+      nil -> {:error, :invalid_grant}
+    end
+  end
+
+  def rotate_oauth_refresh(%Token{} = token, now) do
+    token
+    |> Ecto.Changeset.change(revoked_at: now, authenticated_at: now)
+    |> Repo.update()
+  end
+
+  def revoke_oauth(token_ids_query, now) do
+    Repo.update_all(
+      from(token in Token,
+        where: token.id in subquery(token_ids_query) and is_nil(token.revoked_at)
+      ),
+      set: [revoked_at: now]
+    )
+
+    :ok
+  end
+
+  def delete_oauth(token_ids_query) do
+    Repo.delete_all(from token in Token, where: token.id in subquery(token_ids_query))
     :ok
   end
 

@@ -1,13 +1,12 @@
 defmodule Memovee.OAuth.Introspection do
   @moduledoc "Authenticated, non-oracular access-token introspection."
 
-  import Ecto.Query
-
   alias Memovee.Accounts.{Actor, Token}
   alias Memovee.OAuth
   alias Memovee.OAuth.{Access, Cache, Grant, KeyProvider, RateLimiter}
+  alias Memovee.OAuth.Access.Manager, as: AccessManager
   alias Memovee.OAuth.Client.ReplayStore
-  alias Memovee.Repo
+  alias Memovee.OAuth.Grant.Manager, as: GrantManager
   alias TamaOAuth.{ClientAuthentication, ClientMetadata, Error, TokenRequest}
 
   def introspect(params, credentials, remote_ip \\ nil) do
@@ -32,40 +31,14 @@ defmodule Memovee.OAuth.Introspection do
            ),
          {:ok, token_id} <- Ecto.UUID.cast(claims["jti"]),
          {%Token{} = token, %Access{} = access, %Grant{} = grant, %Actor{} = actor} <-
-           active_reference(token_id),
+           AccessManager.active_reference(token_id, OAuth.now()),
          true <- valid_binding?(claims, token, access, grant, actor),
-         {:ok, response} <- TamaOAuth.Introspection.active(claims, grant.id) do
-      now = OAuth.now()
-
-      _updated =
-        Repo.update_all(
-          from(current in Grant, where: current.id == ^grant.id),
-          set: [last_used_at: now]
-        )
-
+         {:ok, response} <- TamaOAuth.Introspection.active(claims, grant.id),
+         {:ok, _grant} <- GrantManager.touch_usage(grant, OAuth.now()) do
       {:ok, response}
     else
       _error -> {:ok, TamaOAuth.Introspection.inactive()}
     end
-  end
-
-  defp active_reference(token_id) do
-    now = OAuth.now()
-
-    from(token in Token,
-      join: access in Access,
-      on: access.actor_token_id == token.id,
-      join: grant in Grant,
-      on: grant.id == access.oauth_grant_id,
-      join: actor in Actor,
-      on: actor.id == token.actor_id,
-      where:
-        token.id == ^token_id and token.context == "oauth_access" and
-          is_nil(token.revoked_at) and token.expires_at > ^now and grant.current_state == "active" and
-          actor.type == :user and actor.current_state == "active",
-      select: {token, access, grant, actor}
-    )
-    |> Repo.one()
   end
 
   defp valid_binding?(claims, token, access, grant, actor) do

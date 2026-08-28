@@ -4,8 +4,10 @@ defmodule Memovee.OAuth.Revocation do
   import Ecto.Query
 
   alias Memovee.Accounts.{Actor, Token}
+  alias Memovee.Accounts.Token.Manager, as: TokenManager
   alias Memovee.OAuth
-  alias Memovee.OAuth.{Access, Client, Event, Grant, KeyProvider, RateLimiter}
+  alias Memovee.OAuth.Access.Manager, as: AccessManager
+  alias Memovee.OAuth.{Client, Event, KeyProvider, RateLimiter}
   alias Memovee.OAuth.Client.ReplayStore
   alias Memovee.OAuth.Grant.Manager, as: GrantManager
   alias Memovee.Repo
@@ -62,7 +64,7 @@ defmodule Memovee.OAuth.Revocation do
              algorithms: [OAuth.config(:signing_algorithm)]
            ),
          {:ok, token_id} <- Ecto.UUID.cast(claims["jti"]),
-         {grant_id, actor_id} <- grant_identity_for_token(token_id, "oauth_access") do
+         {grant_id, actor_id} <- AccessManager.grant_identity_for_token(token_id, "oauth_access") do
       {:ok, {grant_id, actor_id}}
     else
       _error -> refresh_grant_identity(raw_token)
@@ -72,34 +74,10 @@ defmodule Memovee.OAuth.Revocation do
   defp refresh_grant_identity(raw_token) do
     digest = Token.oauth_token_digest(raw_token)
 
-    case grant_identity_for_digest(digest) do
-      {grant_id, actor_id} -> {:ok, {grant_id, actor_id}}
-      nil -> :unknown
+    case AccessManager.refresh_grant_identity(digest) do
+      {:ok, identity} -> {:ok, identity}
+      {:error, :invalid_grant} -> :unknown
     end
-  end
-
-  defp grant_identity_for_token(token_id, context) do
-    Repo.one(
-      from token in Token,
-        join: access in Access,
-        on: access.actor_token_id == token.id,
-        join: grant in Grant,
-        on: grant.id == access.oauth_grant_id,
-        where: token.id == ^token_id and token.context == ^context,
-        select: {grant.id, grant.actor_id}
-    )
-  end
-
-  defp grant_identity_for_digest(digest) do
-    Repo.one(
-      from token in Token,
-        join: access in Access,
-        on: access.actor_token_id == token.id,
-        join: grant in Grant,
-        on: grant.id == access.oauth_grant_id,
-        where: token.token == ^digest and token.context == "oauth_refresh",
-        select: {grant.id, grant.actor_id}
-    )
   end
 
   defp lock_actor(actor_id) do
@@ -114,23 +92,9 @@ defmodule Memovee.OAuth.Revocation do
   end
 
   defp revoke_grant_tokens(grant_id) do
-    now = OAuth.now()
-
-    token_ids =
-      from(access in Access,
-        where: access.oauth_grant_id == ^grant_id,
-        select: access.actor_token_id
-      )
-
-    _result =
-      Repo.update_all(
-        from(token in Token,
-          where: token.id in subquery(token_ids) and is_nil(token.revoked_at)
-        ),
-        set: [revoked_at: now]
-      )
-
-    :ok
+    grant_id
+    |> AccessManager.grant_token_ids_query()
+    |> TokenManager.revoke_oauth(OAuth.now())
   end
 
   defp authenticate(method, client_id, params, metadata, authorization_headers) do

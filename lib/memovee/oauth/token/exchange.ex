@@ -4,10 +4,10 @@ defmodule Memovee.OAuth.Token.Exchange do
   import Ecto.Query
 
   alias Memovee.Accounts.{Actor, Token}
+  alias Memovee.Accounts.Token.Manager, as: TokenManager
   alias Memovee.OAuth
 
   alias Memovee.OAuth.{
-    Access,
     Client,
     Event,
     Grant,
@@ -15,6 +15,7 @@ defmodule Memovee.OAuth.Token.Exchange do
     RateLimiter
   }
 
+  alias Memovee.OAuth.Access.Manager, as: AccessManager
   alias Memovee.OAuth.Actor, as: OAuthActor
   alias Memovee.OAuth.Client.ReplayStore
   alias Memovee.OAuth.Code.Manager, as: CodeManager
@@ -88,7 +89,7 @@ defmodule Memovee.OAuth.Token.Exchange do
     now = OAuth.now()
     digest = Token.oauth_token_digest(params["refresh_token"])
 
-    case refresh_grant_identity(digest) do
+    case AccessManager.refresh_grant_identity(digest) do
       {:ok, {grant_id, actor_id}} ->
         exchange_refresh_for_grant(request, digest, grant_id, actor_id, now)
 
@@ -100,7 +101,8 @@ defmodule Memovee.OAuth.Token.Exchange do
   defp exchange_refresh_for_grant(request, digest, grant_id, actor_id, now) do
     with {:ok, %Actor{} = actor} <- active_actor(actor_id),
          {:ok, %Grant{} = grant} <- GrantManager.lock(grant_id),
-         {:ok, %Token{} = token, %Access{} = access} <- lock_refresh(digest),
+         {:ok, %Token{} = token} <- TokenManager.lock_oauth_refresh(digest),
+         {:ok, access} <- AccessManager.lock_for_token(token.id),
          :ok <- validate_refresh_binding(request, grant, token, access, actor),
          {:ok, decision} <- evaluate_refresh(token, access, now),
          :ok <- rotate_refresh(token, access, now),
@@ -199,28 +201,24 @@ defmodule Memovee.OAuth.Token.Exchange do
     access_expires_at = DateTime.add(now, OAuth.config(:access_token_lifetime_seconds), :second)
     refresh_expires_at = DateTime.add(now, OAuth.config(:refresh_token_lifetime_seconds), :second)
 
-    {refresh_token, refresh_reference} =
-      Token.build_oauth_refresh_token(actor, refresh_expires_at)
-
-    with {:ok, refresh_reference} <- Repo.insert(refresh_reference),
+    with {:ok, refresh_token, refresh_reference} <-
+           TokenManager.issue_oauth_refresh(actor, refresh_expires_at),
          family_id = family_id || refresh_reference.id,
          {:ok, _refresh_access} <-
-           refresh_reference
-           |> Access.changeset(grant, %{family_id: family_id, generation: generation})
-           |> Repo.insert(),
-         access_reference = Token.build_oauth_access_reference(actor, access_expires_at),
-         {:ok, access_reference} <- Repo.insert(access_reference),
+           AccessManager.create(refresh_reference, grant, %{
+             family_id: family_id,
+             generation: generation
+           }),
+         {:ok, access_reference} <- TokenManager.issue_oauth_access(actor, access_expires_at),
          {:ok, _access} <-
-           access_reference
-           |> Access.changeset(grant, %{family_id: family_id, generation: generation})
-           |> Repo.insert(),
+           AccessManager.create(access_reference, grant, %{
+             family_id: family_id,
+             generation: generation
+           }),
          {:ok, signing} <- KeyProvider.signing_key(),
          {:ok, access_token, _claims} <-
            mint_access_token(grant, actor, access_reference, signing, now),
-         {:ok, _grant} <-
-           grant
-           |> Ecto.Changeset.change(last_used_at: now)
-           |> Repo.update() do
+         {:ok, _grant} <- GrantManager.touch_usage(grant, now) do
       {:ok,
        %{
          "access_token" => access_token,
@@ -250,37 +248,6 @@ defmodule Memovee.OAuth.Token.Exchange do
     )
   end
 
-  defp refresh_grant_identity(digest) do
-    query =
-      from token in Token,
-        join: access in Access,
-        on: access.actor_token_id == token.id,
-        join: grant in Grant,
-        on: grant.id == access.oauth_grant_id,
-        where: token.context == "oauth_refresh" and token.token == ^digest,
-        select: {grant.id, grant.actor_id}
-
-    case Repo.one(query) do
-      nil -> {:error, :invalid_grant}
-      identity -> {:ok, identity}
-    end
-  end
-
-  defp lock_refresh(digest) do
-    query =
-      from token in Token,
-        join: access in Access,
-        on: access.actor_token_id == token.id,
-        where: token.context == "oauth_refresh" and token.token == ^digest,
-        select: {token, access},
-        lock: "FOR UPDATE"
-
-    case Repo.one(query) do
-      {%Token{} = token, %Access{} = access} -> {:ok, token, access}
-      nil -> {:error, :invalid_grant}
-    end
-  end
-
   defp active_actor(actor_id) do
     query =
       from actor in Actor,
@@ -294,43 +261,22 @@ defmodule Memovee.OAuth.Token.Exchange do
   end
 
   defp revoke_active_refresh_tokens(grant_id, now) do
-    token_ids =
-      from(access in Access,
-        join: token in Token,
-        on: token.id == access.actor_token_id,
-        where:
-          access.oauth_grant_id == ^grant_id and token.context == "oauth_refresh" and
-            is_nil(token.revoked_at),
-        select: token.id
-      )
-
-    _result =
-      Repo.update_all(from(token in Token, where: token.id in subquery(token_ids)),
-        set: [revoked_at: now]
-      )
-
-    :ok
+    grant_id
+    |> AccessManager.active_refresh_token_ids_query()
+    |> TokenManager.revoke_oauth(now)
   end
 
   defp rotate_refresh(token, access, now) do
-    with {:ok, _token} <-
-           token |> Ecto.Changeset.change(revoked_at: now, authenticated_at: now) |> Repo.update(),
-         {:ok, _access} <- access |> Ecto.Changeset.change(rotated_at: now) |> Repo.update() do
+    with {:ok, _token} <- TokenManager.rotate_oauth_refresh(token, now),
+         {:ok, _access} <- AccessManager.rotate(access, now) do
       :ok
     end
   end
 
   defp revoke_replayed_family(grant_id, family_id, now) do
-    token_ids =
-      from(access in Access,
-        where: access.family_id == ^family_id,
-        select: access.actor_token_id
-      )
-
-    _result =
-      Repo.update_all(from(token in Token, where: token.id in subquery(token_ids)),
-        set: [revoked_at: now]
-      )
+    family_id
+    |> AccessManager.family_token_ids_query()
+    |> TokenManager.revoke_oauth(now)
 
     with {:ok, grant} <- GrantManager.lock(grant_id),
          {:ok, actor} <- OAuthActor.get() do

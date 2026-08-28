@@ -28,6 +28,27 @@ defmodule Memovee.OAuth.KeyProvider do
     end
   end
 
+  def validate_signing_key(key, algorithm, kid) do
+    claims = %{
+      "iss" => "https://issuer.invalid",
+      "sub" => "signing-key-check",
+      "aud" => "https://resource.invalid",
+      "client_id" => "signing-key-check",
+      "scope" => "signing-key-check",
+      "jti" => "signing-key-check"
+    }
+
+    case TamaOAuth.JWT.mint_access_token(claims, key,
+           algorithm: algorithm,
+           kid: kid,
+           now: 0,
+           ttl: 1
+         ) do
+      {:ok, _token, _claims} -> :ok
+      {:error, _error} -> {:error, :invalid_signing_key}
+    end
+  end
+
   defp configured_or_development_keys do
     case OAuth.config(:signing_keys, []) do
       keys when is_list(keys) and keys != [] -> {:ok, Enum.uniq_by(keys, &key_id/1)}

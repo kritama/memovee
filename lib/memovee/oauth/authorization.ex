@@ -54,6 +54,7 @@ defmodule Memovee.OAuth.Authorization do
          client_name: metadata.client_name,
          client_uri: metadata.client_uri,
          redirect_authority: redirect_authority(request.redirect_uri),
+         loopback_redirect?: loopback_redirect?(request.redirect_uri),
          verified_client_metadata?: metadata.verified_client_metadata?
        }}
     else
@@ -140,6 +141,13 @@ defmodule Memovee.OAuth.Authorization do
     uri = URI.parse(redirect_uri)
     host = if String.contains?(uri.host, ":"), do: "[#{uri.host}]", else: uri.host
     if uri.port, do: "#{host}:#{uri.port}", else: host
+  end
+
+  defp loopback_redirect?(redirect_uri) do
+    redirect_uri
+    |> URI.parse()
+    |> Map.get(:host)
+    |> TamaOAuth.URI.loopback_host?()
   end
 
   defp opaque_credential do

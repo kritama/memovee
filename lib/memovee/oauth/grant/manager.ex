@@ -6,6 +6,7 @@ defmodule Memovee.OAuth.Grant.Manager do
   alias Memovee.Accounts.Actor
   alias Memovee.Accounts.Token.Manager, as: TokenManager
   alias Memovee.OAuth
+  alias Memovee.OAuth.Access.Manager, as: AccessManager
   alias Memovee.OAuth.Code.Manager, as: CodeManager
   alias Memovee.OAuth.{Grant, Request}
   alias Memovee.OAuth.Grant.Event
@@ -56,6 +57,12 @@ defmodule Memovee.OAuth.Grant.Manager do
         where: grant.oauth_client_id == ^client_id and grant.current_state == "active"
       )
     )
+  end
+
+  def touch_usage(%Grant{} = grant, now) do
+    grant
+    |> Ecto.Changeset.change(last_used_at: now)
+    |> Repo.update()
   end
 
   def cleanup_revoked(now, batch_size) when is_integer(batch_size) and batch_size > 0 do
@@ -110,7 +117,10 @@ defmodule Memovee.OAuth.Grant.Manager do
   defp cleanup_revoked_grant(grant_id, :ok) do
     case lock(grant_id) do
       {:ok, %Grant{current_state: "revoked"} = grant} ->
-        :ok = TokenManager.delete_oauth_for_grant(grant.id)
+        grant.id
+        |> AccessManager.grant_token_ids_query()
+        |> TokenManager.delete_oauth()
+
         :ok = CodeManager.delete_for_grant(grant.id)
         Repo.delete_all(from event in Event, where: event.oauth_grant_id == ^grant.id)
 
