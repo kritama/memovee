@@ -1,4 +1,4 @@
-defmodule Memovee.OAuth.TamaMCPAppPolicy do
+defmodule Memovee.OAuth.Tama.MCP do
   @moduledoc "The exact resource, scope, and client trust policy for Tama `/mcp/app`."
 
   alias Memovee.OAuth

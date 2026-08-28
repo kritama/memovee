@@ -9,7 +9,8 @@ defmodule MemoveeWeb.Auth.RevocationController do
 
   def create(conn, params) do
     with :ok <- require_form_encoding(conn),
-         {:ok, :ok} <- OAuth.revoke(params, get_req_header(conn, "authorization")) do
+         {:ok, :ok} <-
+           OAuth.revoke(params, get_req_header(conn, "authorization"), conn.remote_ip) do
       conn
       |> put_no_store()
       |> send_resp(:ok, "")

@@ -13,19 +13,19 @@ defmodule Memovee.OAuth.Token.Exchange do
     Event,
     Grant,
     KeyProvider,
-    RateLimiter,
-    SystemActor
+    RateLimiter
   }
 
+  alias Memovee.OAuth.Actor, as: OAuthActor
   alias Memovee.OAuth.Client.ReplayStore
   alias Memovee.OAuth.Grant.Manager, as: GrantManager
   alias Memovee.Repo
   alias TamaOAuth.{ClientAuthentication, Error, PKCE, RefreshToken, Scope, TokenRequest}
 
-  def exchange(params, authorization_headers \\ [])
+  def exchange(params, authorization_headers \\ [], remote_ip \\ nil)
 
-  def exchange(params, authorization_headers) when is_map(params) do
-    with :ok <- rate_limit(params["client_id"]),
+  def exchange(params, authorization_headers, remote_ip) when is_map(params) do
+    with :ok <- rate_limit(remote_ip, params["client_id"]),
          {:ok, request} <-
            TokenRequest.parse(params, authorization_headers: authorization_headers),
          {:ok, metadata} <- Client.fetch(request.client_id),
@@ -43,7 +43,7 @@ defmodule Memovee.OAuth.Token.Exchange do
     end
   end
 
-  def exchange(_params, _headers),
+  def exchange(_params, _headers, _remote_ip),
     do: {:error, Error.new(:invalid_request, stage: :token_request)}
 
   defp perform_exchange(%TokenRequest{grant_type: :authorization_code} = request) do
@@ -62,10 +62,10 @@ defmodule Memovee.OAuth.Token.Exchange do
     now = OAuth.now()
     digest = TamaOAuth.Crypto.digest(params["code"])
 
-    with {:ok, grant_id} <- code_grant_id(digest),
+    with {:ok, {grant_id, actor_id}} <- code_grant_identity(digest),
+         {:ok, %Actor{} = actor} <- active_actor(actor_id),
          {:ok, %Grant{} = grant} <- GrantManager.lock(grant_id),
          {:ok, %Code{} = code} <- lock_code(digest),
-         {:ok, %Actor{} = actor} <- active_actor(grant.actor_id),
          :ok <- validate_code(request, grant, code, actor, now),
          {:ok, _code} <- code |> Ecto.Changeset.change(consumed_at: now) |> Repo.update(),
          :ok <- revoke_active_refresh_tokens(grant.id, now),
@@ -88,16 +88,19 @@ defmodule Memovee.OAuth.Token.Exchange do
     now = OAuth.now()
     digest = Token.oauth_token_digest(params["refresh_token"])
 
-    case refresh_grant_id(digest) do
-      {:ok, grant_id} -> exchange_refresh_for_grant(request, digest, grant_id, now)
-      _error -> {:error, Error.new(:invalid_grant, stage: :refresh_token)}
+    case refresh_grant_identity(digest) do
+      {:ok, {grant_id, actor_id}} ->
+        exchange_refresh_for_grant(request, digest, grant_id, actor_id, now)
+
+      _error ->
+        {:error, Error.new(:invalid_grant, stage: :refresh_token)}
     end
   end
 
-  defp exchange_refresh_for_grant(request, digest, grant_id, now) do
-    with {:ok, %Grant{} = grant} <- GrantManager.lock(grant_id),
+  defp exchange_refresh_for_grant(request, digest, grant_id, actor_id, now) do
+    with {:ok, %Actor{} = actor} <- active_actor(actor_id),
+         {:ok, %Grant{} = grant} <- GrantManager.lock(grant_id),
          {:ok, %Token{} = token, %Access{} = access} <- lock_refresh(digest),
-         {:ok, %Actor{} = actor} <- active_actor(grant.actor_id),
          :ok <- validate_refresh_binding(request, grant, token, access, actor),
          {:ok, decision} <- evaluate_refresh(token, access, now),
          :ok <- rotate_refresh(token, access, now),
@@ -247,12 +250,16 @@ defmodule Memovee.OAuth.Token.Exchange do
     )
   end
 
-  defp code_grant_id(digest) do
+  defp code_grant_identity(digest) do
     case Repo.one(
-           from code in Code, where: code.code_digest == ^digest, select: code.oauth_grant_id
+           from code in Code,
+             join: grant in Grant,
+             on: grant.id == code.oauth_grant_id,
+             where: code.code_digest == ^digest,
+             select: {grant.id, grant.actor_id}
          ) do
       nil -> {:error, :invalid_grant}
-      grant_id -> {:ok, grant_id}
+      identity -> {:ok, identity}
     end
   end
 
@@ -267,17 +274,19 @@ defmodule Memovee.OAuth.Token.Exchange do
     end
   end
 
-  defp refresh_grant_id(digest) do
+  defp refresh_grant_identity(digest) do
     query =
       from token in Token,
         join: access in Access,
         on: access.actor_token_id == token.id,
+        join: grant in Grant,
+        on: grant.id == access.oauth_grant_id,
         where: token.context == "oauth_refresh" and token.token == ^digest,
-        select: access.oauth_grant_id
+        select: {grant.id, grant.actor_id}
 
     case Repo.one(query) do
       nil -> {:error, :invalid_grant}
-      grant_id -> {:ok, grant_id}
+      identity -> {:ok, identity}
     end
   end
 
@@ -348,7 +357,7 @@ defmodule Memovee.OAuth.Token.Exchange do
       )
 
     with {:ok, grant} <- GrantManager.lock(grant_id),
-         {:ok, actor} <- SystemActor.get() do
+         {:ok, actor} <- OAuthActor.get() do
       _transition = GrantManager.revoke(grant, actor)
     end
 
@@ -356,8 +365,11 @@ defmodule Memovee.OAuth.Token.Exchange do
     {:ok, {:replay, Error.new(:invalid_grant, stage: :refresh_replay)}}
   end
 
-  defp rate_limit(client_id) do
-    case RateLimiter.check(:token, client_id || :unknown) do
+  defp rate_limit(remote_ip, client_id) do
+    case RateLimiter.token(
+           remote_ip || {:internal, self()},
+           client_id || :unknown
+         ) do
       :ok ->
         :ok
 

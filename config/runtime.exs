@@ -156,6 +156,7 @@ if config_env() == :prod do
   config :memovee, Memovee.OAuth,
     issuer: oauth_issuer,
     resource: tama_resource,
+    allow_local_client_metadata: false,
     signing_algorithm: signing_algorithm,
     signing_key_id: signing_key_id,
     signing_keys: signing_keys,

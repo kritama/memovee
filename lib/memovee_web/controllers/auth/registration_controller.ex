@@ -28,7 +28,7 @@ defmodule MemoveeWeb.Auth.RegistrationController do
   end
 
   defp rate_limit(remote_ip) do
-    case RateLimiter.check(:registration, remote_ip) do
+    case RateLimiter.registration(remote_ip) do
       :ok ->
         :ok
 

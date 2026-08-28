@@ -9,7 +9,8 @@ defmodule MemoveeWeb.Auth.TokenController do
 
   def create(conn, params) do
     with :ok <- require_form_encoding(conn),
-         {:ok, response} <- OAuth.exchange(params, get_req_header(conn, "authorization")) do
+         {:ok, response} <-
+           OAuth.exchange(params, get_req_header(conn, "authorization"), conn.remote_ip) do
       conn
       |> put_no_store()
       |> json(response)

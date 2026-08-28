@@ -11,10 +11,10 @@ defmodule Memovee.OAuth.Revocation do
   alias Memovee.Repo
   alias TamaOAuth.{ClientAuthentication, Error, TokenRequest}
 
-  def revoke(params, authorization_headers \\ [])
+  def revoke(params, authorization_headers \\ [], remote_ip \\ nil)
 
-  def revoke(params, authorization_headers) when is_map(params) do
-    with :ok <- rate_limit(params["client_id"]),
+  def revoke(params, authorization_headers, remote_ip) when is_map(params) do
+    with :ok <- rate_limit(remote_ip, params["client_id"]),
          {:ok, request} <- TamaOAuth.Revocation.parse(params),
          {:ok, method} <- TokenRequest.detect_authentication(params, authorization_headers),
          {:ok, metadata} <- Client.fetch(request.client_id),
@@ -27,7 +27,7 @@ defmodule Memovee.OAuth.Revocation do
     end
   end
 
-  def revoke(_params, _headers),
+  def revoke(_params, _headers, _remote_ip),
     do: {:error, Error.new(:invalid_request, stage: :revocation_request)}
 
   defp revoke_if_owned(raw_token, client_id) do
@@ -135,8 +135,11 @@ defmodule Memovee.OAuth.Revocation do
     )
   end
 
-  defp rate_limit(client_id) do
-    case RateLimiter.check(:revocation, client_id || :unknown) do
+  defp rate_limit(remote_ip, client_id) do
+    case RateLimiter.revocation(
+           remote_ip || {:internal, self()},
+           client_id || :unknown
+         ) do
       :ok ->
         :ok
 

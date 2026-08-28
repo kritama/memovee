@@ -10,8 +10,8 @@ defmodule Memovee.OAuth.Introspection do
   alias Memovee.Repo
   alias TamaOAuth.{ClientAuthentication, ClientMetadata, Error, TokenRequest}
 
-  def introspect(params, credentials) do
-    with :ok <- rate_limit(credentials),
+  def introspect(params, credentials, remote_ip \\ nil) do
+    with :ok <- rate_limit(remote_ip, params["client_id"] || credentials),
          :ok <- authenticate_resource_server(params, credentials),
          {:ok, raw_token} <- TamaOAuth.Introspection.parse_request(params) do
       active_or_inactive(raw_token)
@@ -156,8 +156,8 @@ defmodule Memovee.OAuth.Introspection do
     end
   end
 
-  defp rate_limit(credentials) do
-    case RateLimiter.check(:introspection, credentials) do
+  defp rate_limit(remote_ip, client_id) do
+    case RateLimiter.introspection(remote_ip || {:internal, self()}, client_id) do
       :ok ->
         :ok
 

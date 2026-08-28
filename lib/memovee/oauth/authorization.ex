@@ -5,8 +5,9 @@ defmodule Memovee.OAuth.Authorization do
 
   alias Memovee.Accounts.{Actor, Scope}
   alias Memovee.OAuth
-  alias Memovee.OAuth.{Client, Code, Event, Grant, RateLimiter, Request, TamaMCPAppPolicy}
+  alias Memovee.OAuth.{Client, Code, Event, Grant, RateLimiter, Request}
   alias Memovee.OAuth.Grant.Manager, as: GrantManager
+  alias Memovee.OAuth.Tama.MCP
   alias Memovee.Repo
   alias TamaOAuth.{AuthorizationRequest, ClientMetadata, Crypto, Error}
 
@@ -14,8 +15,8 @@ defmodule Memovee.OAuth.Authorization do
     with :ok <- rate_limit(remote_ip),
          {:ok, request} <-
            AuthorizationRequest.validate(params,
-             resource: TamaMCPAppPolicy.resource(),
-             supported_scopes: TamaMCPAppPolicy.supported_scopes()
+             resource: MCP.resource(),
+             supported_scopes: MCP.supported_scopes()
            ),
          {:ok, metadata} <- Client.fetch(request.client_id),
          true <- ClientMetadata.redirect_allowed?(request.redirect_uri, metadata),
@@ -211,7 +212,7 @@ defmodule Memovee.OAuth.Authorization do
   end
 
   defp rate_limit(remote_ip) do
-    case RateLimiter.check(:authorization, remote_ip || :unknown) do
+    case RateLimiter.authorization(remote_ip || {:internal, self()}) do
       :ok -> :ok
       {:error, _retry_after} -> {:error, :rate_limited}
     end

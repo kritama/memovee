@@ -37,7 +37,7 @@ config :memovee, Memovee.OAuth,
     "https://chatgpt.com/oauth/",
     "https://chatgpt.com/oauth/codex/"
   ],
-  allow_local_client_metadata: true,
+  allow_local_client_metadata: false,
   pre_registered_clients: %{},
   token_endpoint_auth_methods: ["none", "private_key_jwt"],
   token_endpoint_auth_signing_algorithms: ["RS256"],

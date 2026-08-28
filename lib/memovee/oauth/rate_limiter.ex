@@ -1,7 +1,7 @@
 defmodule Memovee.OAuth.RateLimiter do
-  @moduledoc "Small application-owned fixed-window limiter for OAuth boundaries."
+  @moduledoc "Distributed OAuth boundary rate limits backed by Hammer and Phoenix PubSub."
 
-  use GenServer
+  alias __MODULE__.{Listener, Local}
 
   @default_limits %{
     authorization: {30, 60_000},
@@ -11,35 +11,66 @@ defmodule Memovee.OAuth.RateLimiter do
     introspection: {120, 60_000}
   }
 
-  def start_link(_opts), do: GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
+  @pubsub Memovee.PubSub
+  @topic "oauth:rate_limiter"
 
-  def check(bucket, key) do
-    GenServer.call(__MODULE__, {:check, bucket, :erlang.phash2(key)})
-  end
+  def authorization(remote_ip), do: hit(:authorization, :ip, remote_ip)
+  def registration(remote_ip), do: hit(:registration, :ip, remote_ip)
 
-  @impl true
-  def init(state), do: {:ok, state}
-
-  @impl true
-  def handle_call({:check, bucket, key}, _from, state) do
-    {limit, window_ms} = Map.fetch!(@default_limits, bucket)
-    now = System.monotonic_time(:millisecond)
-
-    case Map.get(state, {bucket, key}) do
-      {count, started_at} when now - started_at < window_ms and count >= limit ->
-        retry_after = max(div(window_ms - (now - started_at), 1_000), 1)
-        {:reply, {:error, retry_after}, state}
-
-      {count, started_at} when now - started_at < window_ms ->
-        {:reply, :ok, Map.put(state, {bucket, key}, {count + 1, started_at})}
-
-      _ ->
-        state = prune(state, now, window_ms)
-        {:reply, :ok, Map.put(state, {bucket, key}, {1, now})}
+  def token(remote_ip, client_id) do
+    with :ok <- hit(:token, :ip, remote_ip) do
+      hit(:token, :client, client_id)
     end
   end
 
-  defp prune(state, now, max_window) do
-    Map.reject(state, fn {_key, {_count, started_at}} -> now - started_at >= max_window end)
+  def revocation(remote_ip, client_id) do
+    with :ok <- hit(:revocation, :ip, remote_ip) do
+      hit(:revocation, :client, client_id)
+    end
+  end
+
+  def introspection(remote_ip, client_id) do
+    with :ok <- hit(:introspection, :ip, remote_ip) do
+      hit(:introspection, :client, client_id)
+    end
+  end
+
+  def child_spec(opts) do
+    %{
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, [opts]},
+      type: :supervisor
+    }
+  end
+
+  def start_link(opts) do
+    children = [
+      {Local, opts},
+      {Listener, pubsub: @pubsub, topic: @topic}
+    ]
+
+    Supervisor.start_link(children, strategy: :one_for_one)
+  end
+
+  defp hit(bucket, dimension, identifier) do
+    {limit, window_ms} = Map.fetch!(@default_limits, bucket)
+    key = :erlang.term_to_binary({__MODULE__, bucket, dimension, identifier_digest(identifier)})
+
+    :ok = broadcast({:inc, key, window_ms, 1})
+
+    case Local.hit(key, window_ms, limit) do
+      {:allow, _count} -> :ok
+      {:deny, retry_after} -> {:error, {:rate_limited, retry_after}}
+    end
+  end
+
+  defp identifier_digest(identifier),
+    do: identifier |> :erlang.term_to_binary() |> TamaOAuth.Crypto.digest()
+
+  defp broadcast(message) do
+    case Process.whereis(Listener) do
+      nil -> Phoenix.PubSub.broadcast(@pubsub, @topic, message)
+      listener -> Phoenix.PubSub.broadcast_from(@pubsub, listener, @topic, message)
+    end
   end
 end

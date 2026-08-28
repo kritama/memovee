@@ -7,7 +7,7 @@ defmodule Memovee.OAuth.Cleanup do
 
   alias Memovee.Accounts.Token
   alias Memovee.OAuth
-  alias Memovee.OAuth.{Client, Code, Event, Request, SystemActor}
+  alias Memovee.OAuth.{Actor, Client, Code, Event, Request}
   alias Memovee.Repo
 
   @batch_size 250
@@ -88,7 +88,7 @@ defmodule Memovee.OAuth.Cleanup do
   end
 
   defp expire_pending_requests(now) do
-    with {:ok, actor} <- SystemActor.get() do
+    with {:ok, actor} <- Actor.get() do
       Request
       |> where([request], request.current_state == "pending" and request.expires_at <= ^now)
       |> order_by([request], asc: request.expires_at)

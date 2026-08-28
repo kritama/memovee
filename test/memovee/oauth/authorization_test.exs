@@ -67,6 +67,32 @@ defmodule Memovee.OAuth.AuthorizationTest do
     assert Repo.aggregate(Code, :count) == 1
   end
 
+  test "approval and refresh exchange acquire Actor and grant locks in the same order" do
+    scope = user_scope_fixture()
+    %{code: code} = authorize(scope)
+    assert {:ok, tokens} = exchange_code(code)
+    assert {:ok, handle} = OAuth.start_authorization(authorization_params())
+
+    operations = [
+      fn -> OAuth.approve(scope, handle) end,
+      fn ->
+        OAuth.exchange(%{
+          "grant_type" => "refresh_token",
+          "client_id" => client_id(),
+          "refresh_token" => tokens["refresh_token"]
+        })
+      end
+    ]
+
+    results =
+      operations
+      |> Task.async_stream(fn operation -> operation.() end, timeout: :infinity)
+      |> Enum.map(fn {:ok, result} -> result end)
+
+    assert Enum.all?(results, &match?({:ok, _result}, &1))
+    assert Repo.one!(Grant).current_state == "active"
+  end
+
   test "authorization code exchange issues a JWT and digest-only rotating refresh token" do
     scope = user_scope_fixture()
     %{code: code} = authorize(scope)

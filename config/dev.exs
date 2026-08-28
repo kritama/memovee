@@ -68,6 +68,8 @@ config :phoenix, :plug_init_mode, :runtime
 
 config :open_api_spex, :cache_adapter, OpenApiSpex.Plug.NoneCache
 
+config :memovee, Memovee.OAuth, allow_local_client_metadata: true
+
 config :phoenix_live_view,
   # Include debug annotations and locations in rendered markup.
   # Changing this configuration will require mix clean and a full recompile.

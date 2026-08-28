@@ -10,7 +10,7 @@ defmodule MemoveeWeb.Auth.IntrospectionController do
   def create(conn, params) do
     with :ok <- require_form_encoding(conn),
          {:ok, response} <-
-           OAuth.introspect(params, get_req_header(conn, "authorization")) do
+           OAuth.introspect(params, get_req_header(conn, "authorization"), conn.remote_ip) do
       conn
       |> put_no_store()
       |> json(response)

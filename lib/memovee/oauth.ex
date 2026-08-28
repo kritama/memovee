@@ -13,9 +13,15 @@ defmodule Memovee.OAuth do
   defdelegate consent(scope, handle), to: Authorization
   defdelegate approve(scope, handle), to: Authorization
   defdelegate deny(scope, handle), to: Authorization
-  defdelegate exchange(params, authorization_headers \\ []), to: Exchange
-  defdelegate revoke(params, authorization_headers \\ []), to: Revocation
-  defdelegate introspect(params, credentials), to: Introspection
+
+  def exchange(params, authorization_headers \\ [], remote_ip \\ nil),
+    do: Exchange.exchange(params, authorization_headers, remote_ip)
+
+  def revoke(params, authorization_headers \\ [], remote_ip \\ nil),
+    do: Revocation.revoke(params, authorization_headers, remote_ip)
+
+  def introspect(params, credentials, remote_ip \\ nil),
+    do: Introspection.introspect(params, credentials, remote_ip)
 
   def config(key), do: Keyword.fetch!(config(), key)
   def config(key, default), do: Keyword.get(config(), key, default)

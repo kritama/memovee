@@ -804,7 +804,7 @@ acceptance if necessary.
 Create an explicit policy module, expected to be:
 
 ```text
-Memovee.OAuth.TamaMCPAppPolicy
+Memovee.OAuth.Tama.MCP
 ```
 
 It owns:
@@ -921,7 +921,7 @@ Memovee.OAuth.KeyProvider
 Memovee.OAuth.RateLimiter
 Memovee.OAuth.Request
 Memovee.OAuth.Revocation
-Memovee.OAuth.TamaMCPAppPolicy
+Memovee.OAuth.Tama.MCP
 Memovee.OAuth.Token.Exchange
 ```
 

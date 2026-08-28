@@ -2,8 +2,8 @@ defmodule Memovee.OAuth.Client.Registration.Manager do
   @moduledoc "Creates and resolves bounded dynamic public-client registrations."
 
   alias Memovee.OAuth
+  alias Memovee.OAuth.Actor
   alias Memovee.OAuth.Client.Registration
-  alias Memovee.OAuth.SystemActor
   alias Memovee.Repo
   alias TamaOAuth.ClientMetadata
 
@@ -13,7 +13,7 @@ defmodule Memovee.OAuth.Client.Registration.Manager do
              TamaOAuth.ClientRegistration.normalize(params,
                supported_scopes: ["mcp.message"]
              ),
-           {:ok, actor} <- SystemActor.get(),
+           {:ok, actor} <- Actor.get(),
            {:ok, registration} <- persist(normalized),
            {:ok, registration} <- transition(registration, actor, "activate") do
         {:ok, response(registration)}
