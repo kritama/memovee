@@ -200,4 +200,31 @@ defmodule Memovee.OAuth.AuthorizationTest do
 
     assert {:error, :invalid_consent} = OAuth.consent(scope, handle)
   end
+
+  test "rejects pending requests after the configured resource changes" do
+    scope = user_scope_fixture()
+    assert {:ok, handle} = OAuth.start_authorization(authorization_params())
+
+    replace_resource("https://tama.example/mcp/app-v2")
+
+    assert {:error, :invalid_consent} = OAuth.consent(scope, handle)
+    assert {:error, :resource_changed} = OAuth.approve(scope, handle)
+    refute Repo.exists?(Code)
+    refute Repo.exists?(Grant)
+  end
+
+  test "rejects authorization codes issued for a retired resource" do
+    scope = user_scope_fixture()
+    %{code: code} = authorize(scope)
+
+    replace_resource("https://tama.example/mcp/app-v2")
+
+    assert {:error, %TamaOAuth.Error{code: :invalid_grant}} = exchange_code(code)
+  end
+
+  defp replace_resource(resource) do
+    original_config = Application.fetch_env!(:memovee, OAuth)
+    on_exit(fn -> Application.put_env(:memovee, OAuth, original_config) end)
+    Application.put_env(:memovee, OAuth, Keyword.put(original_config, :resource, resource))
+  end
 end

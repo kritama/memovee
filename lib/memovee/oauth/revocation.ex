@@ -1,9 +1,8 @@
 defmodule Memovee.OAuth.Revocation do
   @moduledoc "Client-authenticated, non-oracular OAuth credential revocation."
 
-  import Ecto.Query
-
   alias Memovee.Accounts.{Actor, Token}
+  alias Memovee.Accounts.Actor.Manager, as: ActorManager
   alias Memovee.Accounts.Token.Manager, as: TokenManager
   alias Memovee.OAuth
   alias Memovee.OAuth.Access.Manager, as: AccessManager
@@ -41,7 +40,7 @@ defmodule Memovee.OAuth.Revocation do
 
   defp revoke_grant(grant_id, actor_id, client_id) do
     Repo.transact(fn ->
-      with {:ok, %Actor{} = actor} <- lock_actor(actor_id),
+      with {:ok, %Actor{} = actor} <- ActorManager.get(actor_id, lock: :update),
            {:ok, grant} <- GrantManager.lock(grant_id),
            true <- grant.actor_id == actor.id and grant.oauth_client_id == client_id,
            {:ok, grant} <- GrantManager.revoke(grant, actor),
@@ -77,17 +76,6 @@ defmodule Memovee.OAuth.Revocation do
     case AccessManager.refresh_grant_identity(digest) do
       {:ok, identity} -> {:ok, identity}
       {:error, :invalid_grant} -> :unknown
-    end
-  end
-
-  defp lock_actor(actor_id) do
-    Actor
-    |> where([actor], actor.id == ^actor_id)
-    |> lock("FOR UPDATE")
-    |> Repo.one()
-    |> case do
-      %Actor{} = actor -> {:ok, actor}
-      nil -> {:error, :invalid_actor}
     end
   end
 

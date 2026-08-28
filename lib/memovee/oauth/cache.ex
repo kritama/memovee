@@ -4,8 +4,9 @@ defmodule Memovee.OAuth.Cache do
   use GenServer
 
   @table __MODULE__
+  @sweep_interval_ms :timer.minutes(1)
 
-  def start_link(_opts), do: GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
+  def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
   def get(key) do
     now = System.monotonic_time(:millisecond)
@@ -24,10 +25,15 @@ defmodule Memovee.OAuth.Cache do
 
   def delete(key), do: GenServer.call(__MODULE__, {:delete, key})
 
+  def prune_expired(now \\ System.monotonic_time(:millisecond)) when is_integer(now) do
+    GenServer.call(__MODULE__, {:prune_expired, now})
+  end
+
   @impl true
-  def init(:ok) do
+  def init(opts) do
     _table = :ets.new(@table, [:named_table, :set, :protected, read_concurrency: true])
-    {:ok, %{}}
+    sweep_interval_ms = Keyword.get(opts, :sweep_interval_ms, @sweep_interval_ms)
+    {:ok, schedule_sweep(%{sweep_interval_ms: sweep_interval_ms})}
   end
 
   @impl true
@@ -39,5 +45,26 @@ defmodule Memovee.OAuth.Cache do
   def handle_call({:delete, key}, _from, state) do
     true = :ets.delete(@table, key)
     {:reply, nil, state}
+  end
+
+  def handle_call({:prune_expired, now}, _from, state) do
+    {:reply, delete_expired(now), state}
+  end
+
+  @impl true
+  def handle_info(:sweep_expired, state) do
+    _deleted_count = delete_expired(System.monotonic_time(:millisecond))
+    {:noreply, schedule_sweep(state)}
+  end
+
+  defp schedule_sweep(state) do
+    _timer = Process.send_after(self(), :sweep_expired, state.sweep_interval_ms)
+    state
+  end
+
+  defp delete_expired(now) do
+    :ets.select_delete(@table, [
+      {{:"$1", :"$2", :"$3"}, [{:"=<", :"$3", now}], [true]}
+    ])
   end
 end

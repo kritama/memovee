@@ -1,9 +1,8 @@
 defmodule Memovee.OAuth.Authorization do
   @moduledoc "Authorization request, consent, and approval orchestration."
 
-  import Ecto.Query
-
   alias Memovee.Accounts.{Actor, Scope}
+  alias Memovee.Accounts.Actor.Manager, as: ActorManager
   alias Memovee.OAuth
   alias Memovee.OAuth.{Client, Event, RateLimiter}
   alias Memovee.OAuth.Code.Manager, as: CodeManager
@@ -43,8 +42,9 @@ defmodule Memovee.OAuth.Authorization do
   end
 
   def consent(%Scope{actor: %Actor{} = actor}, handle) do
-    with {:ok, actor} <- active_actor(actor.id),
+    with {:ok, actor} <- ActorManager.get_active_user(actor.id),
          {:ok, request} <- RequestManager.get_pending(handle),
+         :ok <- validate_current_resource(request),
          {:ok, metadata} <- Client.refresh(request.client_id),
          :ok <- validate_metadata(request, metadata) do
       {:ok,
@@ -72,7 +72,7 @@ defmodule Memovee.OAuth.Authorization do
 
   def deny(%Scope{actor: %Actor{id: actor_id}}, handle) do
     Repo.transact(fn ->
-      with {:ok, actor} <- active_actor(actor_id, lock: true),
+      with {:ok, actor} <- ActorManager.get_active_user(actor_id, lock: :update),
            {:ok, request} <- RequestManager.get_pending(handle, lock: true),
            {:ok, request} <- RequestManager.transition(request, actor, "deny") do
         Event.emit(:authorization_denied, %{client_id: request.client_id, actor_id: actor.id})
@@ -84,8 +84,9 @@ defmodule Memovee.OAuth.Authorization do
   def deny(_scope, _handle), do: {:error, :invalid_consent}
 
   defp approve_transaction(actor_id, handle) do
-    with {:ok, actor} <- active_actor(actor_id, lock: true),
+    with {:ok, actor} <- ActorManager.get_active_user(actor_id, lock: :update),
          {:ok, request} <- RequestManager.get_pending(handle, lock: true),
+         :ok <- validate_current_resource(request),
          {:ok, metadata} <- Client.refresh(request.client_id),
          :ok <- validate_metadata(request, metadata),
          {:ok, grant} <- GrantManager.resolve_for_approval(actor, request),
@@ -102,25 +103,16 @@ defmodule Memovee.OAuth.Authorization do
     end
   end
 
-  defp active_actor(id, opts \\ []) do
-    query =
-      from actor in Actor,
-        where: actor.id == ^id and actor.type == :user and actor.current_state == "active"
-
-    query = if opts[:lock], do: lock(query, "FOR UPDATE"), else: query
-
-    case Repo.one(query) do
-      %Actor{} = actor -> {:ok, actor}
-      nil -> {:error, :inactive_actor}
-    end
-  end
-
   defp validate_metadata(request, metadata) do
     valid? =
       Crypto.secure_compare(request.client_metadata_digest, metadata.metadata_digest) and
         ClientMetadata.redirect_allowed?(request.redirect_uri, metadata)
 
     if valid?, do: :ok, else: {:error, :client_metadata_changed}
+  end
+
+  defp validate_current_resource(request) do
+    if request.resource == MCP.resource(), do: :ok, else: {:error, :resource_changed}
   end
 
   defp redirect_uri(request, params) do

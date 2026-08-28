@@ -1,9 +1,8 @@
 defmodule Memovee.OAuth.Token.Exchange do
   @moduledoc "Atomic authorization-code and rotating-refresh exchanges."
 
-  import Ecto.Query
-
   alias Memovee.Accounts.{Actor, Token}
+  alias Memovee.Accounts.Actor.Manager, as: ActorManager
   alias Memovee.Accounts.Token.Manager, as: TokenManager
   alias Memovee.OAuth
 
@@ -64,7 +63,7 @@ defmodule Memovee.OAuth.Token.Exchange do
     digest = TamaOAuth.Crypto.digest(params["code"])
 
     with {:ok, {grant_id, actor_id}} <- CodeManager.grant_identity(digest),
-         {:ok, %Actor{} = actor} <- active_actor(actor_id),
+         {:ok, %Actor{} = actor} <- ActorManager.get_active_user(actor_id, lock: :share),
          {:ok, %Grant{} = grant} <- GrantManager.lock(grant_id),
          {:ok, code} <- CodeManager.lock(digest),
          :ok <- validate_code(request, grant, code, actor, now),
@@ -99,7 +98,7 @@ defmodule Memovee.OAuth.Token.Exchange do
   end
 
   defp exchange_refresh_for_grant(request, digest, grant_id, actor_id, now) do
-    with {:ok, %Actor{} = actor} <- active_actor(actor_id),
+    with {:ok, %Actor{} = actor} <- ActorManager.get_active_user(actor_id, lock: :share),
          {:ok, %Grant{} = grant} <- GrantManager.lock(grant_id),
          {:ok, %Token{} = token} <- TokenManager.lock_oauth_refresh(digest),
          {:ok, access} <- AccessManager.lock_for_token(token.id),
@@ -149,7 +148,8 @@ defmodule Memovee.OAuth.Token.Exchange do
   end
 
   defp active_authorization?(grant, actor) do
-    grant.current_state == "active" and actor.current_state == "active"
+    grant.current_state == "active" and actor.current_state == "active" and
+      grant.resource == OAuth.resource()
   end
 
   defp code_bound?(request, grant, code) do
@@ -246,18 +246,6 @@ defmodule Memovee.OAuth.Token.Exchange do
       now: DateTime.to_unix(now),
       ttl: OAuth.config(:access_token_lifetime_seconds)
     )
-  end
-
-  defp active_actor(actor_id) do
-    query =
-      from actor in Actor,
-        where: actor.id == ^actor_id and actor.type == :user and actor.current_state == "active",
-        lock: "FOR SHARE"
-
-    case Repo.one(query) do
-      %Actor{} = actor -> {:ok, actor}
-      nil -> {:error, :inactive_actor}
-    end
   end
 
   defp revoke_active_refresh_tokens(grant_id, now) do
