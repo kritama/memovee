@@ -10,6 +10,9 @@ defmodule Memovee.Application do
     children = [
       MemoveeWeb.Telemetry,
       Memovee.Repo,
+      Memovee.OAuth.Cache,
+      Memovee.OAuth.RateLimiter,
+      Memovee.OAuth.Cleanup,
       {DNSCluster, query: Application.get_env(:memovee, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Memovee.PubSub},
       # Start a worker by calling: Memovee.Worker.start_link(arg)

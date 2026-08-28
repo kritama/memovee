@@ -41,6 +41,32 @@ docker compose up -d --wait postgres
 mix test
 ```
 
+## OAuth authorization server
+
+Memovee issues resource-bound OAuth access tokens for Tama's `/mcp/app`
+protected resource. Shared OAuth protocol mechanics come from the released
+`tama_oauth` Hex package; Memovee retains ownership of Actors, grants,
+persistence, consent, signing-key custody, and HTTP endpoints.
+
+Development uses a process-local asymmetric key. Production requires these
+environment variables:
+
+```text
+MEMOVEE_OAUTH_ISSUER
+MEMOVEE_TAMA_MCP_APP_RESOURCE
+MEMOVEE_OAUTH_SIGNING_ALGORITHM
+MEMOVEE_OAUTH_SIGNING_KEY_ID
+MEMOVEE_OAUTH_PRIVATE_SIGNING_KEY
+MEMOVEE_OAUTH_PUBLIC_SIGNING_KEYS
+MEMOVEE_TAMA_INTROSPECTION_CLIENT_ID
+MEMOVEE_TAMA_INTROSPECTION_JWKS_URI
+```
+
+The private signing key is a JSON JWK. `MEMOVEE_OAUTH_PUBLIC_SIGNING_KEYS` is a
+JSON array containing any previous public verification keys retained during a
+rotation overlap. Tama authenticates introspection requests with
+`private_key_jwt`; no signing secret is shared between the services.
+
 ## Database Lifecycle
 
 Stop PostgreSQL without removing its data:

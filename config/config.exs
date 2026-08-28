@@ -24,6 +24,34 @@ config :memovee,
   ecto_repos: [Memovee.Repo],
   generators: [timestamp_type: :utc_datetime, binary_id: true]
 
+config :memovee, :environment, config_env()
+
+config :memovee, Memovee.OAuth,
+  issuer: "http://localhost:4000",
+  resource: "http://localhost:4001/mcp/app",
+  signing_algorithm: "RS256",
+  signing_key_id: "memovee-oauth-local-1",
+  signing_keys: [],
+  allowed_client_ids: [],
+  allowed_client_id_prefixes: [
+    "https://chatgpt.com/oauth/",
+    "https://chatgpt.com/oauth/codex/"
+  ],
+  allow_local_client_metadata: true,
+  pre_registered_clients: %{},
+  token_endpoint_auth_methods: ["none", "private_key_jwt"],
+  token_endpoint_auth_signing_algorithms: ["RS256"],
+  authorization_request_lifetime_seconds: 600,
+  authorization_code_lifetime_seconds: 120,
+  access_token_lifetime_seconds: 600,
+  refresh_token_lifetime_seconds: 2_592_000,
+  refresh_token_idle_lifetime_seconds: 604_800,
+  cleanup_interval_ms: 900_000,
+  client_assertion_clock_skew_seconds: 30,
+  introspection_client_id: "tama-mcp-app",
+  introspection_jwks_uri: nil,
+  introspection_bearer_token: nil
+
 # Configure the endpoint
 config :memovee, MemoveeWeb.Endpoint,
   url: [host: "localhost"],
