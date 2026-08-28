@@ -34,6 +34,19 @@ defmodule MemoveeWeb.Plugs.TrustedProxyTest do
     assert TrustedProxy.call(conn, opts).remote_ip == {198, 51, 100, 10}
   end
 
+  test "uses the socket peer when no trusted proxies are configured" do
+    conn =
+      :get
+      |> conn("/")
+      |> Map.put(:remote_ip, {198, 51, 100, 11})
+      |> put_req_header("x-forwarded-for", "192.0.2.100")
+
+    assert [] = TrustedProxy.validate_proxies!([])
+
+    assert TrustedProxy.call(conn, TrustedProxy.init(proxies: [])).remote_ip ==
+             {198, 51, 100, 11}
+  end
+
   test "supports exact IPv6 proxy addresses" do
     conn =
       :get

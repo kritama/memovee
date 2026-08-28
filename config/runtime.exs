@@ -127,10 +127,6 @@ if config_env() == :prod do
         []
     end
 
-  if trusted_proxies == [] do
-    raise "MEMOVEE_TRUSTED_PROXIES must list the trusted reverse-proxy IPs or CIDRs"
-  end
-
   MemoveeWeb.Plugs.TrustedProxy.validate_proxies!(trusted_proxies)
 
   unless signing_algorithm in ["RS256", "PS256", "ES256"] do
