@@ -5,7 +5,8 @@ defmodule Memovee.OAuth.Authorization do
 
   alias Memovee.Accounts.{Actor, Scope}
   alias Memovee.OAuth
-  alias Memovee.OAuth.{Client, Code, Event, Grant, RateLimiter, Request}
+  alias Memovee.OAuth.{Client, Event, RateLimiter}
+  alias Memovee.OAuth.Code.Manager, as: CodeManager
   alias Memovee.OAuth.Grant.Manager, as: GrantManager
   alias Memovee.OAuth.Request.Manager, as: RequestManager
   alias Memovee.OAuth.Tama.MCP
@@ -88,7 +89,7 @@ defmodule Memovee.OAuth.Authorization do
          :ok <- validate_metadata(request, metadata),
          {:ok, grant} <- GrantManager.resolve_for_approval(actor, request),
          {raw_code, code_digest} <- opaque_credential(),
-         {:ok, _code} <- create_code(grant, request, code_digest),
+         {:ok, _code} <- CodeManager.issue(grant, request, code_digest),
          {:ok, request} <- RequestManager.transition(request, actor, "approve") do
       Event.emit(:authorization_approved, %{
         client_id: request.client_id,
@@ -98,23 +99,6 @@ defmodule Memovee.OAuth.Authorization do
 
       {:ok, redirect_uri(request, %{"code" => raw_code})}
     end
-  end
-
-  defp create_code(%Grant{} = grant, %Request{} = request, digest) do
-    expires_at =
-      OAuth.now()
-      |> DateTime.add(OAuth.config(:authorization_code_lifetime_seconds), :second)
-
-    %Code{oauth_grant_id: grant.id}
-    |> Code.changeset(%{
-      code_digest: digest,
-      redirect_uri: request.redirect_uri,
-      resource: request.resource,
-      scope: request.scope,
-      code_challenge: request.code_challenge,
-      expires_at: expires_at
-    })
-    |> Repo.insert()
   end
 
   defp active_actor(id, opts \\ []) do

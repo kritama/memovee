@@ -58,6 +58,7 @@ MEMOVEE_OAUTH_SIGNING_ALGORITHM
 MEMOVEE_OAUTH_SIGNING_KEY_ID
 MEMOVEE_OAUTH_PRIVATE_SIGNING_KEY
 MEMOVEE_OAUTH_PUBLIC_SIGNING_KEYS
+MEMOVEE_TRUSTED_PROXIES
 MEMOVEE_TAMA_INTROSPECTION_CLIENT_ID
 MEMOVEE_TAMA_INTROSPECTION_JWKS_URI
 ```
@@ -66,6 +67,9 @@ The private signing key is a JSON JWK. `MEMOVEE_OAUTH_PUBLIC_SIGNING_KEYS` is a
 JSON array containing any previous public verification keys retained during a
 rotation overlap. Tama authenticates introspection requests with
 `private_key_jwt`; no signing secret is shared between the services.
+`MEMOVEE_TRUSTED_PROXIES` is a comma-separated list of the exact IP addresses or
+CIDR ranges allowed to supply `X-Forwarded-For`; forwarded addresses from every
+other socket peer are ignored.
 
 ## Database Lifecycle
 

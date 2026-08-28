@@ -7,6 +7,7 @@ defmodule Memovee.Accounts.Token.Manager do
 
   alias Memovee.Accounts.{Actor, Agent, Relationship, Token, User}
   alias Memovee.Accounts.Agent.Manager, as: AgentManager
+  alias Memovee.OAuth.Access
   alias Memovee.Repo
 
   @api_context "api"
@@ -91,6 +92,35 @@ defmodule Memovee.Accounts.Token.Manager do
   end
 
   def verify_api_token(_client_id, _client_secret), do: {:error, :unauthorized}
+
+  def cleanup_oauth(now, batch_size) when is_integer(batch_size) and batch_size > 0 do
+    ids =
+      from(token in Token,
+        where:
+          token.context in ["oauth_access", "oauth_refresh"] and
+            (token.expires_at <= ^now or
+               (token.context == "oauth_access" and not is_nil(token.revoked_at))),
+        order_by: [asc: token.expires_at, asc: token.id],
+        limit: ^batch_size,
+        select: token.id
+      )
+
+    {deleted_count, _tokens} =
+      Repo.delete_all(from token in Token, where: token.id in subquery(ids))
+
+    {:ok, deleted_count == batch_size}
+  end
+
+  def delete_oauth_for_grant(grant_id) do
+    token_ids =
+      from(access in Access,
+        where: access.oauth_grant_id == ^grant_id,
+        select: access.actor_token_id
+      )
+
+    Repo.delete_all(from token in Token, where: token.id in subquery(token_ids))
+    :ok
+  end
 
   defp owned_api_token_query(owner_id, agent_id) do
     from credential in Token,

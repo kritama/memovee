@@ -4,7 +4,11 @@ defmodule Memovee.OAuth.Grant.Manager do
   import Ecto.Query
 
   alias Memovee.Accounts.Actor
+  alias Memovee.Accounts.Token.Manager, as: TokenManager
+  alias Memovee.OAuth
+  alias Memovee.OAuth.Code.Manager, as: CodeManager
   alias Memovee.OAuth.{Grant, Request}
+  alias Memovee.OAuth.Grant.Event
   alias Memovee.Repo
 
   def resolve_for_approval(%Actor{} = actor, %Request{} = request) do
@@ -54,6 +58,15 @@ defmodule Memovee.OAuth.Grant.Manager do
     )
   end
 
+  def cleanup_revoked(now, batch_size) when is_integer(batch_size) and batch_size > 0 do
+    cutoff = DateTime.add(now, -OAuth.config(:revoked_grant_retention_seconds), :second)
+    grant_ids = revoked_cleanup_candidates(cutoff, batch_size)
+
+    with :ok <- Enum.reduce_while(grant_ids, :ok, &cleanup_revoked_grant(&1, &2)) do
+      {:ok, length(grant_ids) == batch_size}
+    end
+  end
+
   defp replace(grant, actor, request) do
     with {:ok, _grant} <- revoke(grant, actor) do
       create(actor, request)
@@ -78,6 +91,39 @@ defmodule Memovee.OAuth.Grant.Manager do
     case Eventful.Transit.perform(grant, actor, event_name) do
       {:ok, %{resource: transitioned}} -> {:ok, transitioned}
       error -> error
+    end
+  end
+
+  defp revoked_cleanup_candidates(cutoff, batch_size) do
+    Event
+    |> where(
+      [event],
+      event.name == "revoke" and event.domain == "transitions" and event.inserted_at <= ^cutoff
+    )
+    |> group_by([event], event.oauth_grant_id)
+    |> order_by([event], asc: min(event.inserted_at), asc: event.oauth_grant_id)
+    |> limit(^batch_size)
+    |> select([event], event.oauth_grant_id)
+    |> Repo.all()
+  end
+
+  defp cleanup_revoked_grant(grant_id, :ok) do
+    case lock(grant_id) do
+      {:ok, %Grant{current_state: "revoked"} = grant} ->
+        :ok = TokenManager.delete_oauth_for_grant(grant.id)
+        :ok = CodeManager.delete_for_grant(grant.id)
+        Repo.delete_all(from event in Event, where: event.oauth_grant_id == ^grant.id)
+
+        case Repo.delete(grant) do
+          {:ok, _grant} -> {:cont, :ok}
+          {:error, reason} -> {:halt, {:error, reason}}
+        end
+
+      {:ok, %Grant{}} ->
+        {:cont, :ok}
+
+      {:error, :invalid_grant} ->
+        {:cont, :ok}
     end
   end
 end

@@ -115,6 +115,24 @@ if config_env() == :prod do
       _error -> raise "MEMOVEE_OAUTH_PUBLIC_SIGNING_KEYS must be a JSON array of JWKs"
     end
 
+  trusted_proxies =
+    case System.get_env("MEMOVEE_TRUSTED_PROXIES") do
+      value when is_binary(value) ->
+        value
+        |> String.split(",", trim: true)
+        |> Enum.map(&String.trim/1)
+        |> Enum.reject(&(&1 == ""))
+
+      _missing ->
+        []
+    end
+
+  if trusted_proxies == [] do
+    raise "MEMOVEE_TRUSTED_PROXIES must list the trusted reverse-proxy IPs or CIDRs"
+  end
+
+  MemoveeWeb.Plugs.TrustedProxy.validate_proxies!(trusted_proxies)
+
   unless signing_algorithm in ["RS256", "PS256", "ES256"] do
     raise "MEMOVEE_OAUTH_SIGNING_ALGORITHM must be RS256, PS256, or ES256"
   end
@@ -163,6 +181,8 @@ if config_env() == :prod do
     introspection_client_id: introspection_client_id,
     introspection_jwks_uri: introspection_jwks_uri,
     introspection_bearer_token: nil
+
+  config :memovee, MemoveeWeb.Plugs.TrustedProxy, proxies: trusted_proxies
 
   # ## SSL Support
   #

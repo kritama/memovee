@@ -9,7 +9,6 @@ defmodule Memovee.OAuth.Token.Exchange do
   alias Memovee.OAuth.{
     Access,
     Client,
-    Code,
     Event,
     Grant,
     KeyProvider,
@@ -18,6 +17,7 @@ defmodule Memovee.OAuth.Token.Exchange do
 
   alias Memovee.OAuth.Actor, as: OAuthActor
   alias Memovee.OAuth.Client.ReplayStore
+  alias Memovee.OAuth.Code.Manager, as: CodeManager
   alias Memovee.OAuth.Grant.Manager, as: GrantManager
   alias Memovee.Repo
   alias TamaOAuth.{ClientAuthentication, Error, PKCE, RefreshToken, Scope, TokenRequest}
@@ -62,12 +62,12 @@ defmodule Memovee.OAuth.Token.Exchange do
     now = OAuth.now()
     digest = TamaOAuth.Crypto.digest(params["code"])
 
-    with {:ok, {grant_id, actor_id}} <- code_grant_identity(digest),
+    with {:ok, {grant_id, actor_id}} <- CodeManager.grant_identity(digest),
          {:ok, %Actor{} = actor} <- active_actor(actor_id),
          {:ok, %Grant{} = grant} <- GrantManager.lock(grant_id),
-         {:ok, %Code{} = code} <- lock_code(digest),
+         {:ok, code} <- CodeManager.lock(digest),
          :ok <- validate_code(request, grant, code, actor, now),
-         {:ok, _code} <- code |> Ecto.Changeset.change(consumed_at: now) |> Repo.update(),
+         {:ok, _code} <- CodeManager.consume(code, now),
          :ok <- revoke_active_refresh_tokens(grant.id, now),
          {:ok, response} <- issue_tokens(grant, actor, nil, 0, now) do
       Event.emit(:authorization_code_exchanged, %{
@@ -248,30 +248,6 @@ defmodule Memovee.OAuth.Token.Exchange do
       now: DateTime.to_unix(now),
       ttl: OAuth.config(:access_token_lifetime_seconds)
     )
-  end
-
-  defp code_grant_identity(digest) do
-    case Repo.one(
-           from code in Code,
-             join: grant in Grant,
-             on: grant.id == code.oauth_grant_id,
-             where: code.code_digest == ^digest,
-             select: {grant.id, grant.actor_id}
-         ) do
-      nil -> {:error, :invalid_grant}
-      identity -> {:ok, identity}
-    end
-  end
-
-  defp lock_code(digest) do
-    Code
-    |> where([code], code.code_digest == ^digest)
-    |> lock("FOR UPDATE")
-    |> Repo.one()
-    |> case do
-      %Code{} = code -> {:ok, code}
-      nil -> {:error, :invalid_grant}
-    end
   end
 
   defp refresh_grant_identity(digest) do

@@ -44,6 +44,9 @@ config :memovee, Memovee.OAuth,
   authorization_request_lifetime_seconds: 600,
   authorization_request_retention_seconds: 86_400,
   authorization_request_cleanup_batch_size: 100,
+  credential_cleanup_batch_size: 250,
+  revoked_grant_retention_seconds: 7_776_000,
+  revoked_grant_cleanup_batch_size: 100,
   authorization_code_lifetime_seconds: 120,
   access_token_lifetime_seconds: 600,
   refresh_token_lifetime_seconds: 2_592_000,
@@ -56,6 +59,8 @@ config :memovee, Memovee.OAuth,
   introspection_client_id: "tama-mcp-app",
   introspection_jwks_uri: nil,
   introspection_bearer_token: nil
+
+config :memovee, MemoveeWeb.Plugs.TrustedProxy, proxies: []
 
 # Configure the endpoint
 config :memovee, MemoveeWeb.Endpoint,
