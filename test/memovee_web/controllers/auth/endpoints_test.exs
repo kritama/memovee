@@ -1,4 +1,4 @@
-defmodule MemoveeWeb.OAuth.EndpointsTest do
+defmodule MemoveeWeb.Auth.EndpointsTest do
   use MemoveeWeb.ConnCase, async: false
 
   import Memovee.OAuthFixtures

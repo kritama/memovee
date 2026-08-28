@@ -1,18 +1,18 @@
-defmodule MemoveeWeb.OAuth.RevocationController do
+defmodule MemoveeWeb.Auth.TokenController do
   @moduledoc false
 
   use MemoveeWeb, :controller
 
   alias Memovee.OAuth
 
-  action_fallback MemoveeWeb.OAuth.FallbackController
+  action_fallback MemoveeWeb.Auth.FallbackController
 
   def create(conn, params) do
     with :ok <- require_form_encoding(conn),
-         {:ok, :ok} <- OAuth.revoke(params, get_req_header(conn, "authorization")) do
+         {:ok, response} <- OAuth.exchange(params, get_req_header(conn, "authorization")) do
       conn
       |> put_no_store()
-      |> send_resp(:ok, "")
+      |> json(response)
     end
   end
 

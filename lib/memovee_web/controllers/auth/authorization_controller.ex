@@ -1,11 +1,11 @@
-defmodule MemoveeWeb.OAuth.AuthorizationController do
+defmodule MemoveeWeb.Auth.AuthorizationController do
   @moduledoc false
 
   use MemoveeWeb, :controller
 
   alias Memovee.OAuth
 
-  action_fallback MemoveeWeb.OAuth.FallbackController
+  action_fallback MemoveeWeb.Auth.FallbackController
 
   def new(conn, params) do
     with {:ok, handle} <- OAuth.start_authorization(params, conn.remote_ip) do

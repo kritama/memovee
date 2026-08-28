@@ -1,11 +1,11 @@
-defmodule MemoveeWeb.OAuth.JWKSController do
+defmodule MemoveeWeb.Auth.JWKSController do
   @moduledoc false
 
   use MemoveeWeb, :controller
 
   alias Memovee.OAuth.KeyProvider
 
-  action_fallback MemoveeWeb.OAuth.FallbackController
+  action_fallback MemoveeWeb.Auth.FallbackController
 
   def show(conn, _params) do
     with {:ok, jwks} <- KeyProvider.public_jwks() do

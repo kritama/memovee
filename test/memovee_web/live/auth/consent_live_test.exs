@@ -1,4 +1,4 @@
-defmodule MemoveeWeb.OAuth.ConsentLiveTest do
+defmodule MemoveeWeb.Auth.ConsentLiveTest do
   use MemoveeWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest

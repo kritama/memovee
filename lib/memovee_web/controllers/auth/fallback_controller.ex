@@ -1,4 +1,4 @@
-defmodule MemoveeWeb.OAuth.FallbackController do
+defmodule MemoveeWeb.Auth.FallbackController do
   @moduledoc false
 
   use MemoveeWeb, :controller

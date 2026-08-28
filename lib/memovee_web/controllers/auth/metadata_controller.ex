@@ -1,4 +1,4 @@
-defmodule MemoveeWeb.OAuth.MetadataController do
+defmodule MemoveeWeb.Auth.MetadataController do
   @moduledoc false
 
   use MemoveeWeb, :controller
@@ -6,7 +6,7 @@ defmodule MemoveeWeb.OAuth.MetadataController do
   alias Memovee.OAuth
   alias TamaOAuth.Metadata.AuthorizationServer
 
-  action_fallback MemoveeWeb.OAuth.FallbackController
+  action_fallback MemoveeWeb.Auth.FallbackController
 
   def authorization_server(conn, _params) do
     with {:ok, metadata} <-

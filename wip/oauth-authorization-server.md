@@ -928,17 +928,17 @@ Memovee.OAuth.Token.Exchange
 Expected web modules:
 
 ```text
-MemoveeWeb.OAuth.AuthorizationController
-MemoveeWeb.OAuth.ConsentLive
-MemoveeWeb.OAuth.FallbackController
-MemoveeWeb.OAuth.IntrospectionController
-MemoveeWeb.OAuth.JWKSController
-MemoveeWeb.OAuth.MetadataController
-MemoveeWeb.OAuth.RegistrationController
-MemoveeWeb.OAuth.RegistrationJSON
-MemoveeWeb.OAuth.RevocationController
-MemoveeWeb.OAuth.TokenController
-MemoveeWeb.OAuth.TokenJSON
+MemoveeWeb.Auth.AuthorizationController
+MemoveeWeb.Auth.ConsentLive
+MemoveeWeb.Auth.FallbackController
+MemoveeWeb.Auth.IntrospectionController
+MemoveeWeb.Auth.JWKSController
+MemoveeWeb.Auth.MetadataController
+MemoveeWeb.Auth.RegistrationController
+MemoveeWeb.Auth.RegistrationJSON
+MemoveeWeb.Auth.RevocationController
+MemoveeWeb.Auth.TokenController
+MemoveeWeb.Auth.TokenJSON
 ```
 
 Repo queries, persistence, locking, transactions, and cleanup orchestration

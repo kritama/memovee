@@ -1,4 +1,4 @@
-defmodule MemoveeWeb.OAuth.RegistrationController do
+defmodule MemoveeWeb.Auth.RegistrationController do
   @moduledoc false
 
   use MemoveeWeb, :controller
@@ -6,7 +6,7 @@ defmodule MemoveeWeb.OAuth.RegistrationController do
   alias Memovee.OAuth.Client.Registration.Manager
   alias Memovee.OAuth.RateLimiter
 
-  action_fallback MemoveeWeb.OAuth.FallbackController
+  action_fallback MemoveeWeb.Auth.FallbackController
 
   def create(conn, params) do
     with :ok <- require_json(conn),

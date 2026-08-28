@@ -1,4 +1,4 @@
-defmodule MemoveeWeb.OAuth.ConsentLive do
+defmodule MemoveeWeb.Auth.ConsentLive do
   @moduledoc false
 
   use MemoveeWeb, :live_view

@@ -1,11 +1,11 @@
-defmodule MemoveeWeb.OAuth.IntrospectionController do
+defmodule MemoveeWeb.Auth.IntrospectionController do
   @moduledoc false
 
   use MemoveeWeb, :controller
 
   alias Memovee.OAuth
 
-  action_fallback MemoveeWeb.OAuth.FallbackController
+  action_fallback MemoveeWeb.Auth.FallbackController
 
   def create(conn, params) do
     with :ok <- require_form_encoding(conn),
