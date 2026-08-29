@@ -2,7 +2,7 @@ defmodule Memovee.OAuth.Client do
   @moduledoc "Application client trust, caching, and JWKS adapter."
 
   alias Memovee.OAuth
-  alias Memovee.OAuth.Cache
+  alias Memovee.OAuth.{Cache, JWKSCache}
   alias Memovee.OAuth.Client.Registration.Manager, as: RegistrationManager
   alias Memovee.OAuth.Tama.MCP
   alias TamaOAuth.ClientMetadata
@@ -23,12 +23,15 @@ defmodule Memovee.OAuth.Client do
 
   def key(%ClientMetadata{client_id: client_id, jwks_uri: jwks_uri}, kid, algorithm)
       when is_binary(jwks_uri) do
-    key = {:client_jwks, client_id, jwks_uri}
-
-    with {:ok, jwks} <- cached_jwks(key, client_id, jwks_uri),
-         {:ok, selected} <- TamaOAuth.JWKS.select(jwks, kid, algorithm, algorithms: [algorithm]) do
-      {:ok, selected}
-    else
+    case JWKSCache.select(
+           {:client_jwks, client_id, jwks_uri},
+           jwks_uri,
+           client_id,
+           kid,
+           algorithm,
+           ttl_ms: @cache_ttl_ms
+         ) do
+      {:ok, selected} -> {:ok, selected}
       {:error, :temporarily_unavailable} -> {:error, :temporarily_unavailable}
       _ -> {:error, :invalid_client}
     end
@@ -80,18 +83,5 @@ defmodule Memovee.OAuth.Client do
       auth_methods: OAuth.config(:token_endpoint_auth_methods),
       signing_algorithms: OAuth.config(:token_endpoint_auth_signing_algorithms)
     ]
-  end
-
-  defp cached_jwks(key, client_id, jwks_uri) do
-    case Cache.get(key) do
-      nil ->
-        with {:ok, jwks} <- TamaOAuth.JWKS.fetch(jwks_uri, client_id) do
-          :ok = Cache.put(key, jwks, @cache_ttl_ms)
-          {:ok, jwks}
-        end
-
-      jwks ->
-        {:ok, jwks}
-    end
   end
 end

@@ -3,7 +3,7 @@ defmodule Memovee.OAuth.Introspection do
 
   alias Memovee.Accounts.{Actor, Token}
   alias Memovee.OAuth
-  alias Memovee.OAuth.{Access, Cache, Grant, KeyProvider, RateLimiter}
+  alias Memovee.OAuth.{Access, Grant, JWKSCache, KeyProvider, RateLimiter}
   alias Memovee.OAuth.Access.Manager, as: AccessManager
   alias Memovee.OAuth.Client.ReplayStore
   alias Memovee.OAuth.Grant.Manager, as: GrantManager
@@ -105,28 +105,17 @@ defmodule Memovee.OAuth.Introspection do
   end
 
   defp introspection_key(%ClientMetadata{jwks_uri: jwks_uri}, kid, algorithm) do
-    cache_key = {:introspection_jwks, jwks_uri}
-
-    with {:ok, jwks} <- cached_introspection_jwks(cache_key, jwks_uri),
-         {:ok, key} <-
-           TamaOAuth.JWKS.select(jwks, kid, algorithm, algorithms: [algorithm]) do
-      {:ok, key}
-    else
+    case JWKSCache.select(
+           {:introspection_jwks, jwks_uri},
+           jwks_uri,
+           jwks_uri,
+           kid,
+           algorithm,
+           ttl_ms: :timer.minutes(5)
+         ) do
+      {:ok, key} -> {:ok, key}
       {:error, :temporarily_unavailable} -> {:error, :temporarily_unavailable}
       _error -> {:error, :invalid_client}
-    end
-  end
-
-  defp cached_introspection_jwks(cache_key, jwks_uri) do
-    case Cache.get(cache_key) do
-      nil ->
-        with {:ok, jwks} <- TamaOAuth.JWKS.fetch(jwks_uri, jwks_uri) do
-          :ok = Cache.put(cache_key, jwks, :timer.minutes(5))
-          {:ok, jwks}
-        end
-
-      jwks ->
-        {:ok, jwks}
     end
   end
 
