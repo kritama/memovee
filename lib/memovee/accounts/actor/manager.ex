@@ -8,6 +8,21 @@ defmodule Memovee.Accounts.Actor.Manager do
   alias Memovee.Accounts.Actor
   alias Memovee.Repo
 
+  def get_or_create_agent(identifier) when is_binary(identifier) do
+    changeset = Actor.agent_changeset(%Actor{}, %{identifier: identifier})
+
+    if changeset.valid? do
+      normalized_identifier = Ecto.Changeset.get_field(changeset, :identifier)
+
+      case Repo.get_by(Actor, identifier: normalized_identifier, type: :agent) do
+        %Actor{} = actor -> {:ok, actor}
+        nil -> insert_or_reload_agent(changeset, normalized_identifier)
+      end
+    else
+      {:error, changeset}
+    end
+  end
+
   def get(id, opts \\ []) do
     Actor
     |> where([actor], actor.id == ^id)
@@ -42,6 +57,19 @@ defmodule Memovee.Accounts.Actor.Manager do
       :share -> lock(query, "FOR SHARE")
       :update -> lock(query, "FOR UPDATE")
       nil -> query
+    end
+  end
+
+  defp insert_or_reload_agent(changeset, identifier) do
+    case Repo.insert(changeset) do
+      {:ok, actor} ->
+        {:ok, actor}
+
+      {:error, _changeset} = error ->
+        case Repo.get_by(Actor, identifier: identifier, type: :agent) do
+          %Actor{} = actor -> {:ok, actor}
+          nil -> error
+        end
     end
   end
 end

@@ -54,19 +54,26 @@ defmodule Memovee.OAuth.Code.Manager do
     |> Repo.update()
   end
 
-  def cleanup(now, batch_size) when is_integer(batch_size) and batch_size > 0 do
-    ids =
+  def cleanup_candidates(now, batch_size) when is_integer(batch_size) and batch_size > 0 do
+    from(code in Code,
+      where: code.expires_at <= ^now or not is_nil(code.consumed_at),
+      order_by: [asc: code.expires_at, asc: code.id],
+      limit: ^batch_size,
+      select: {code.id, code.oauth_grant_id}
+    )
+    |> Repo.all()
+  end
+
+  def delete_if_expired(code_id, now) do
+    Repo.delete_all(
       from(code in Code,
-        where: code.expires_at <= ^now or not is_nil(code.consumed_at),
-        order_by: [asc: code.expires_at, asc: code.id],
-        limit: ^batch_size,
-        select: code.id
+        where:
+          code.id == ^code_id and
+            (code.expires_at <= ^now or not is_nil(code.consumed_at))
       )
+    )
 
-    {deleted_count, _codes} =
-      Repo.delete_all(from code in Code, where: code.id in subquery(ids))
-
-    {:ok, deleted_count == batch_size}
+    :ok
   end
 
   def delete_for_grant(grant_id) do

@@ -92,22 +92,17 @@ defmodule Memovee.Accounts.Token.Manager do
 
   def verify_api_token(_client_id, _client_secret), do: {:error, :unauthorized}
 
-  def cleanup_oauth(now, batch_size) when is_integer(batch_size) and batch_size > 0 do
-    ids =
+  def delete_oauth_if_expired(token_id, now) do
+    Repo.delete_all(
       from(token in Token,
         where:
-          token.context in ["oauth_access", "oauth_refresh"] and
+          token.id == ^token_id and token.context in ["oauth_access", "oauth_refresh"] and
             (token.expires_at <= ^now or
-               (token.context == "oauth_access" and not is_nil(token.revoked_at))),
-        order_by: [asc: token.expires_at, asc: token.id],
-        limit: ^batch_size,
-        select: token.id
+               (token.context == "oauth_access" and not is_nil(token.revoked_at)))
       )
+    )
 
-    {deleted_count, _tokens} =
-      Repo.delete_all(from token in Token, where: token.id in subquery(ids))
-
-    {:ok, deleted_count == batch_size}
+    :ok
   end
 
   def issue_oauth_refresh(%Actor{} = actor, expires_at) do

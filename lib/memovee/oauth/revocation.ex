@@ -9,6 +9,7 @@ defmodule Memovee.OAuth.Revocation do
   alias Memovee.OAuth.{Client, Event, KeyProvider, RateLimiter}
   alias Memovee.OAuth.Client.ReplayStore
   alias Memovee.OAuth.Grant.Manager, as: GrantManager
+  alias Memovee.OAuth.Tama.MCP
   alias Memovee.Repo
   alias TamaOAuth.{ClientAuthentication, Error, TokenRequest}
 
@@ -59,7 +60,7 @@ defmodule Memovee.OAuth.Revocation do
            TamaOAuth.JWT.verify_access_token(raw_token, jwks,
              issuer: OAuth.issuer(),
              audience: OAuth.resource(),
-             scopes: ["mcp.message"],
+             scopes: MCP.supported_scopes(),
              algorithms: [OAuth.config(:signing_algorithm)]
            ),
          {:ok, token_id} <- Ecto.UUID.cast(claims["jti"]),

@@ -19,6 +19,7 @@ defmodule Memovee.OAuth.Token.Exchange do
   alias Memovee.OAuth.Client.ReplayStore
   alias Memovee.OAuth.Code.Manager, as: CodeManager
   alias Memovee.OAuth.Grant.Manager, as: GrantManager
+  alias Memovee.OAuth.Tama.MCP
   alias Memovee.Repo
   alias TamaOAuth.{ClientAuthentication, Error, PKCE, RefreshToken, Scope, TokenRequest}
 
@@ -149,7 +150,7 @@ defmodule Memovee.OAuth.Token.Exchange do
 
   defp active_authorization?(grant, actor) do
     grant.current_state == "active" and actor.current_state == "active" and
-      grant.resource == OAuth.resource()
+      current_grant_policy?(grant)
   end
 
   defp code_bound?(request, grant, code) do
@@ -168,7 +169,7 @@ defmodule Memovee.OAuth.Token.Exchange do
     valid? =
       access.oauth_grant_id == grant.id and token.actor_id == actor.id and
         grant.current_state == "active" and grant.oauth_client_id == request.client_id and
-        grant.resource == OAuth.resource() and
+        current_grant_policy?(grant) and
         match?({:ok, ^requested_scope}, Scope.normalize(requested_scope, [grant.scope]))
 
     if valid?, do: :ok, else: {:error, Error.new(:invalid_grant, stage: :refresh_binding)}
@@ -261,18 +262,22 @@ defmodule Memovee.OAuth.Token.Exchange do
     end
   end
 
+  defp current_grant_policy?(grant) do
+    grant.resource == OAuth.resource() and
+      match?({:ok, scope} when scope == grant.scope, MCP.normalize_scope(grant.scope))
+  end
+
   defp revoke_replayed_family(grant_id, family_id, now) do
     family_id
     |> AccessManager.family_token_ids_query()
     |> TokenManager.revoke_oauth(now)
 
     with {:ok, grant} <- GrantManager.lock(grant_id),
-         {:ok, actor} <- OAuthActor.get() do
-      _transition = GrantManager.revoke(grant, actor)
+         {:ok, actor} <- OAuthActor.get(),
+         {:ok, _grant} <- GrantManager.revoke(grant, actor) do
+      Event.emit(:refresh_replayed, %{grant_id: grant_id, reason: :family_replay})
+      {:ok, {:replay, Error.new(:invalid_grant, stage: :refresh_replay)}}
     end
-
-    Event.emit(:refresh_replayed, %{grant_id: grant_id, reason: :family_replay})
-    {:ok, {:replay, Error.new(:invalid_grant, stage: :refresh_replay)}}
   end
 
   defp rate_limit(remote_ip, client_id) do

@@ -7,6 +7,7 @@ defmodule Memovee.OAuth.Introspection do
   alias Memovee.OAuth.Access.Manager, as: AccessManager
   alias Memovee.OAuth.Client.ReplayStore
   alias Memovee.OAuth.Grant.Manager, as: GrantManager
+  alias Memovee.OAuth.Tama.MCP
   alias TamaOAuth.{ClientAuthentication, ClientMetadata, Error, TokenRequest}
 
   def introspect(params, credentials, remote_ip \\ nil) do
@@ -26,7 +27,7 @@ defmodule Memovee.OAuth.Introspection do
            TamaOAuth.JWT.verify_access_token(raw_token, jwks,
              issuer: OAuth.issuer(),
              audience: OAuth.resource(),
-             scopes: ["mcp.message"],
+             scopes: MCP.supported_scopes(),
              algorithms: [OAuth.config(:signing_algorithm)]
            ),
          {:ok, token_id} <- Ecto.UUID.cast(claims["jti"]),

@@ -9,6 +9,7 @@ defmodule Memovee.OAuth.Client.Registration.Manager do
   alias Memovee.OAuth.Client.Registration.Event, as: RegistrationEvent
   alias Memovee.OAuth.Grant.Manager, as: GrantManager
   alias Memovee.OAuth.Request.Manager, as: RequestManager
+  alias Memovee.OAuth.Tama.MCP
   alias Memovee.Repo
   alias TamaOAuth.ClientMetadata
 
@@ -16,7 +17,7 @@ defmodule Memovee.OAuth.Client.Registration.Manager do
     Repo.transact(fn ->
       with {:ok, normalized} <-
              TamaOAuth.ClientRegistration.normalize(params,
-               supported_scopes: ["mcp.message"]
+               supported_scopes: MCP.supported_scopes()
              ),
            {:ok, actor} <- Actor.get(),
            {:ok, registration} <- persist(normalized),

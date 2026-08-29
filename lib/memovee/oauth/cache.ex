@@ -13,7 +13,7 @@ defmodule Memovee.OAuth.Cache do
 
     case :ets.lookup(@table, key) do
       [{^key, value, expires_at}] when expires_at > now -> value
-      [{^key, _value, _expires_at}] -> delete(key)
+      [{^key, value, expires_at}] -> delete_expired(key, value, expires_at)
       [] -> nil
     end
   end
@@ -24,6 +24,10 @@ defmodule Memovee.OAuth.Cache do
   end
 
   def delete(key), do: GenServer.call(__MODULE__, {:delete, key})
+
+  defp delete_expired(key, value, expires_at) do
+    GenServer.call(__MODULE__, {:delete_expired, key, value, expires_at})
+  end
 
   def prune_expired(now \\ System.monotonic_time(:millisecond)) when is_integer(now) do
     GenServer.call(__MODULE__, {:prune_expired, now})
@@ -47,6 +51,11 @@ defmodule Memovee.OAuth.Cache do
     {:reply, nil, state}
   end
 
+  def handle_call({:delete_expired, key, value, expires_at}, _from, state) do
+    true = :ets.delete_object(@table, {key, value, expires_at})
+    {:reply, current_value(key), state}
+  end
+
   def handle_call({:prune_expired, now}, _from, state) do
     {:reply, delete_expired(now), state}
   end
@@ -66,5 +75,12 @@ defmodule Memovee.OAuth.Cache do
     :ets.select_delete(@table, [
       {{:"$1", :"$2", :"$3"}, [{:"=<", :"$3", now}], [true]}
     ])
+  end
+
+  defp current_value(key) do
+    case :ets.lookup(@table, key) do
+      [{^key, value, _expires_at}] -> value
+      [] -> nil
+    end
   end
 end

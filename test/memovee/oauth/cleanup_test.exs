@@ -5,15 +5,21 @@ defmodule Memovee.OAuth.CleanupTest do
   import Memovee.OAuthFixtures
 
   alias Memovee.Accounts.Token
-  alias Memovee.Accounts.Token.Manager, as: TokenManager
   alias Memovee.OAuth
   alias Memovee.OAuth.{Access, Cleanup, Client, Code, Grant}
-  alias Memovee.OAuth.Client.ReplayStore
-  alias Memovee.OAuth.Code.Manager, as: CodeManager
   alias Memovee.OAuth.Grant.Event, as: GrantEvent
   alias Memovee.Repo
 
-  test "credential managers report full cleanup batches" do
+  test "credential cleanup uses bounded batches" do
+    original_config = Application.fetch_env!(:memovee, OAuth)
+    on_exit(fn -> Application.put_env(:memovee, OAuth, original_config) end)
+
+    Application.put_env(
+      :memovee,
+      OAuth,
+      Keyword.put(original_config, :credential_cleanup_batch_size, 1)
+    )
+
     now = OAuth.now()
     expired_at = DateTime.add(now, -1, :second)
     scope = user_scope_fixture()
@@ -41,13 +47,9 @@ defmodule Memovee.OAuth.CleanupTest do
       |> Repo.insert!()
     end)
 
-    assert {:ok, true} = ReplayStore.cleanup(now, 1)
+    assert {:ok, :ok} = Cleanup.run_once()
     assert Repo.aggregate(Client.Replay, :count) == 1
-
-    assert {:ok, true} = CodeManager.cleanup(now, 1)
     assert Repo.aggregate(Code, :count) == 1
-
-    assert {:ok, true} = TokenManager.cleanup_oauth(now, 1)
 
     assert Repo.aggregate(from(token in Token, where: token.context == "oauth_access"), :count) ==
              1

@@ -84,6 +84,22 @@ defmodule Memovee.OAuth.Access.Manager do
       select: token.id
   end
 
+  def token_cleanup_candidates(now, batch_size)
+      when is_integer(batch_size) and batch_size > 0 do
+    from(token in Token,
+      join: access in Access,
+      on: access.actor_token_id == token.id,
+      where:
+        token.context in ["oauth_access", "oauth_refresh"] and
+          (token.expires_at <= ^now or
+             (token.context == "oauth_access" and not is_nil(token.revoked_at))),
+      order_by: [asc: token.expires_at, asc: token.id],
+      limit: ^batch_size,
+      select: {token.id, access.oauth_grant_id}
+    )
+    |> Repo.all()
+  end
+
   def family_token_ids_query(family_id) do
     from access in Access,
       where: access.family_id == ^family_id,

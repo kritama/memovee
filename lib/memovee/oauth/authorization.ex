@@ -12,6 +12,8 @@ defmodule Memovee.OAuth.Authorization do
   alias Memovee.Repo
   alias TamaOAuth.{AuthorizationRequest, ClientMetadata, Crypto, Error}
 
+  @authorization_response_query_keys ~w(code error error_description error_uri iss scope state)
+
   def start(params, remote_ip \\ nil) when is_map(params) do
     with :ok <- rate_limit(remote_ip),
          {:ok, request} <-
@@ -44,7 +46,7 @@ defmodule Memovee.OAuth.Authorization do
   def consent(%Scope{actor: %Actor{} = actor}, handle) do
     with {:ok, actor} <- ActorManager.get_active_user(actor.id),
          {:ok, request} <- RequestManager.get_pending(handle),
-         :ok <- validate_current_resource(request),
+         :ok <- validate_current_policy(request),
          {:ok, metadata} <- Client.refresh(request.client_id),
          :ok <- validate_metadata(request, metadata) do
       {:ok,
@@ -86,7 +88,7 @@ defmodule Memovee.OAuth.Authorization do
   defp approve_transaction(actor_id, handle) do
     with {:ok, actor} <- ActorManager.get_active_user(actor_id, lock: :update),
          {:ok, request} <- RequestManager.get_pending(handle, lock: true),
-         :ok <- validate_current_resource(request),
+         :ok <- validate_current_policy(request),
          {:ok, metadata} <- Client.refresh(request.client_id),
          :ok <- validate_metadata(request, metadata),
          {:ok, grant} <- GrantManager.resolve_for_approval(actor, request),
@@ -111,22 +113,47 @@ defmodule Memovee.OAuth.Authorization do
     if valid?, do: :ok, else: {:error, :client_metadata_changed}
   end
 
-  defp validate_current_resource(request) do
-    if request.resource == MCP.resource(), do: :ok, else: {:error, :resource_changed}
+  defp validate_current_policy(request) do
+    with true <- request.resource == MCP.resource(),
+         {:ok, scope} <- MCP.normalize_scope(request.scope),
+         true <- scope == request.scope do
+      :ok
+    else
+      _error -> {:error, :authorization_policy_changed}
+    end
   end
 
   defp redirect_uri(request, params) do
     uri = URI.parse(request.redirect_uri)
 
-    query =
-      uri.query
-      |> then(fn query -> if query, do: URI.decode_query(query), else: %{} end)
-      |> Map.merge(params)
+    response_query =
+      params
       |> Map.put("state", request.state)
       |> Map.put("iss", OAuth.issuer())
       |> URI.encode_query()
 
+    query = merge_redirect_query(uri.query, response_query)
+
     %{uri | query: query} |> URI.to_string()
+  end
+
+  defp merge_redirect_query(query, response_query) when query in [nil, ""], do: response_query
+
+  defp merge_redirect_query(query, response_query) do
+    preserved_query =
+      query
+      |> String.split("&", trim: false)
+      |> Enum.reject(&authorization_response_pair?/1)
+      |> Enum.join("&")
+
+    if preserved_query == "", do: response_query, else: preserved_query <> "&" <> response_query
+  end
+
+  defp authorization_response_pair?(pair) do
+    key = pair |> String.split("=", parts: 2) |> List.first()
+    URI.decode_www_form(key) in @authorization_response_query_keys
+  rescue
+    ArgumentError -> false
   end
 
   defp redirect_authority(redirect_uri) do

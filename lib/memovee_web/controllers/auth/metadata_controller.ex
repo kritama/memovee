@@ -4,6 +4,7 @@ defmodule MemoveeWeb.Auth.MetadataController do
   use MemoveeWeb, :controller
 
   alias Memovee.OAuth
+  alias Memovee.OAuth.Tama.MCP
   alias TamaOAuth.Metadata.AuthorizationServer
 
   action_fallback MemoveeWeb.Auth.FallbackController
@@ -19,7 +20,7 @@ defmodule MemoveeWeb.Auth.MetadataController do
              revocation_endpoint: OAuth.endpoint("/auth/revocations"),
              introspection_endpoint: OAuth.endpoint("/auth/introspections"),
              protected_resources: [OAuth.resource()],
-             scopes_supported: ["mcp.message"],
+             scopes_supported: MCP.supported_scopes(),
              token_endpoint_auth_methods_supported: OAuth.config(:token_endpoint_auth_methods),
              token_endpoint_auth_signing_alg_values_supported:
                OAuth.config(:token_endpoint_auth_signing_algorithms)
