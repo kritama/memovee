@@ -190,7 +190,46 @@ defmodule Memovee.OAuth.AuthorizationTest do
                "refresh_token" => first["refresh_token"]
              })
 
-    assert Repo.one!(Grant).current_state == "revoked"
+    assert Repo.one!(Grant).current_state == "active"
+
+    assert {:error, %TamaOAuth.Error{code: :invalid_grant}} =
+             OAuth.exchange(%{
+               "grant_type" => "refresh_token",
+               "client_id" => client_id(),
+               "refresh_token" => second["refresh_token"]
+             })
+  end
+
+  test "refresh replay revokes only its family after same-scope reauthorization" do
+    scope = user_scope_fixture()
+    %{code: first_code} = authorize(scope)
+    assert {:ok, first} = exchange_code(first_code)
+
+    assert {:ok, _rotated_family} =
+             OAuth.exchange(%{
+               "grant_type" => "refresh_token",
+               "client_id" => client_id(),
+               "refresh_token" => first["refresh_token"]
+             })
+
+    %{code: second_code} = authorize(scope)
+    assert {:ok, current_family} = exchange_code(second_code)
+
+    assert {:error, %TamaOAuth.Error{code: :invalid_grant, stage: :refresh_replay}} =
+             OAuth.exchange(%{
+               "grant_type" => "refresh_token",
+               "client_id" => client_id(),
+               "refresh_token" => first["refresh_token"]
+             })
+
+    assert Repo.one!(Grant).current_state == "active"
+
+    assert {:ok, _next_tokens} =
+             OAuth.exchange(%{
+               "grant_type" => "refresh_token",
+               "client_id" => client_id(),
+               "refresh_token" => current_family["refresh_token"]
+             })
   end
 
   test "introspection follows Actor and grant lifecycle" do

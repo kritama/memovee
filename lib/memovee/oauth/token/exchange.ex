@@ -15,7 +15,6 @@ defmodule Memovee.OAuth.Token.Exchange do
   }
 
   alias Memovee.OAuth.Access.Manager, as: AccessManager
-  alias Memovee.OAuth.Actor, as: OAuthActor
   alias Memovee.OAuth.Client.ReplayStore
   alias Memovee.OAuth.Code.Manager, as: CodeManager
   alias Memovee.OAuth.Grant.Manager, as: GrantManager
@@ -268,16 +267,13 @@ defmodule Memovee.OAuth.Token.Exchange do
   end
 
   defp revoke_replayed_family(grant_id, family_id, now) do
-    family_id
-    |> AccessManager.family_token_ids_query()
-    |> TokenManager.revoke_oauth(now)
+    :ok =
+      family_id
+      |> AccessManager.family_token_ids_query()
+      |> TokenManager.revoke_oauth(now)
 
-    with {:ok, grant} <- GrantManager.lock(grant_id),
-         {:ok, actor} <- OAuthActor.get(),
-         {:ok, _grant} <- GrantManager.revoke(grant, actor) do
-      Event.emit(:refresh_replayed, %{grant_id: grant_id, reason: :family_replay})
-      {:ok, {:replay, Error.new(:invalid_grant, stage: :refresh_replay)}}
-    end
+    Event.emit(:refresh_replayed, %{grant_id: grant_id, reason: :family_replay})
+    {:ok, {:replay, Error.new(:invalid_grant, stage: :refresh_replay)}}
   end
 
   defp rate_limit(remote_ip, client_id) do
