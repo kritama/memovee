@@ -42,7 +42,7 @@ defmodule Memovee.OAuth.JWKSCache do
          fetcher
        ) do
     case :global.trans(
-           {__MODULE__, cache_key},
+           {{__MODULE__, cache_key}, self()},
            fn ->
              select_refreshed_or_fetch(
                cache_key,
