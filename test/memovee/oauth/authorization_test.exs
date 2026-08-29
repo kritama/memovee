@@ -5,8 +5,9 @@ defmodule Memovee.OAuth.AuthorizationTest do
   import Memovee.OAuthFixtures
 
   alias Memovee.Accounts.Token
+  alias Memovee.Cache
   alias Memovee.OAuth
-  alias Memovee.OAuth.{Cache, Code, Grant, KeyProvider, Request}
+  alias Memovee.OAuth.{Code, Grant, KeyProvider, Request}
   alias Memovee.Repo
 
   test "persists only request and code digests through approval" do
@@ -346,12 +347,12 @@ defmodule Memovee.OAuth.AuthorizationTest do
         Map.put(original_clients, client_id(), client)
       )
 
-    Cache.delete({:client_metadata, client_id()})
+    Cache.delete!({:client_metadata, client_id()})
     Application.put_env(:memovee, OAuth, updated_config)
 
     on_exit(fn ->
       Application.put_env(:memovee, OAuth, original_config)
-      Cache.delete({:client_metadata, client_id()})
+      Cache.delete!({:client_metadata, client_id()})
     end)
   end
 end

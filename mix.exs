@@ -55,6 +55,8 @@ defmodule Memovee.MixProject do
       {:ecto_sql, "~> 3.14"},
       {:eventful, "~> 3.3"},
       {:hammer, "~> 7.0"},
+      {:nebulex, "~> 3.0"},
+      {:nebulex_local, "~> 3.0"},
       {:remote_ip, "~> 1.2"},
       {:tama_oauth, "~> 0.1.0"},
       {:postgrex, ">= 0.0.0"},

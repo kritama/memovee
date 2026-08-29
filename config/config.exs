@@ -26,6 +26,11 @@ config :memovee,
 
 config :memovee, :environment, config_env()
 
+config :memovee, Memovee.Cache,
+  gc_interval: :timer.hours(12),
+  max_size: 10_000,
+  gc_memory_check_interval: :timer.seconds(30)
+
 config :memovee, Memovee.OAuth,
   issuer: "http://localhost:4000",
   resource: "http://localhost:4001/mcp/app",

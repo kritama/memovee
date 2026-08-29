@@ -10,7 +10,7 @@ defmodule Memovee.Application do
     children = [
       MemoveeWeb.Telemetry,
       Memovee.Repo,
-      Memovee.OAuth.Cache,
+      Memovee.Cache,
       {Phoenix.PubSub, name: Memovee.PubSub},
       Memovee.OAuth.RateLimiter,
       Memovee.OAuth.Cleanup,

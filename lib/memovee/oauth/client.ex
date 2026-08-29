@@ -1,9 +1,11 @@
 defmodule Memovee.OAuth.Client do
   @moduledoc "Application client trust, caching, and JWKS adapter."
 
+  alias Memovee.Cache
   alias Memovee.OAuth
-  alias Memovee.OAuth.{Cache, JWKSCache}
+
   alias Memovee.OAuth.Client.Registration.Manager, as: RegistrationManager
+  alias Memovee.OAuth.JWKSCache
   alias Memovee.OAuth.Tama.MCP
   alias TamaOAuth.ClientMetadata
 
@@ -42,7 +44,7 @@ defmodule Memovee.OAuth.Client do
   defp load(client_id, refresh?) do
     key = {:client_metadata, client_id}
 
-    case {refresh?, Cache.get(key)} do
+    case {refresh?, Cache.get!(key)} do
       {false, %ClientMetadata{} = metadata} -> {:ok, metadata}
       _ -> fetch_and_cache(key, client_id)
     end
@@ -52,7 +54,7 @@ defmodule Memovee.OAuth.Client do
     with true <- MCP.allowed_client_id?(client_id),
          {:ok, metadata} <- fetch_metadata(client_id) do
       ttl = min((metadata.cache_ttl || div(@cache_ttl_ms, 1_000)) * 1_000, @cache_ttl_ms)
-      :ok = Cache.put(key, metadata, max(ttl, 1_000))
+      :ok = Cache.put!(key, metadata, ttl: max(ttl, 1_000))
       {:ok, metadata}
     else
       {:error, reason} -> {:error, reason}

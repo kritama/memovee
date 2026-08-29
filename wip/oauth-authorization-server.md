@@ -865,10 +865,15 @@ Cleanup must lock grants before mutating grant credential families and must
 recheck expiry after acquiring the lock. It must process bounded batches and
 schedule continuation rather than loading an unbounded table.
 
-Memovee does not currently include Tama's cleanup scheduler and cache stack.
-Choose an application-owned supervised worker or add an explicitly justified
-job scheduler. The OAuth domain behavior must not depend directly on a
-particular scheduler library.
+Memovee does not reuse Tama's cleanup scheduler or cache stack. Use an
+application-owned supervised worker or an explicitly justified job scheduler.
+The OAuth domain behavior must not depend directly on a particular scheduler
+library.
+
+The implementation uses the supervised `Memovee.Cache` backed by Nebulex's
+local adapter for bounded metadata and JWKS TTLs, negative refresh cooldowns,
+and per-cache-key JWKS refresh transactions. The OAuth cleanup worker remains
+application-owned and independent of the cache adapter.
 
 ## Module structure
 
