@@ -9,9 +9,10 @@ defmodule Memovee.OAuth.Revocation do
   alias Memovee.OAuth.{Client, Event, KeyProvider, RateLimiter}
   alias Memovee.OAuth.Client.ReplayStore
   alias Memovee.OAuth.Grant.Manager, as: GrantManager
-  alias Memovee.OAuth.Tama.MCP
   alias Memovee.Repo
-  alias TamaOAuth.{ClientAuthentication, Error, TokenRequest}
+  alias TamaOAuth.{ClientAuthentication, Error, JWKS, JWT, TokenRequest}
+
+  @access_token_clock_skew_seconds 30
 
   def revoke(params, authorization_headers \\ [], remote_ip \\ nil)
 
@@ -56,19 +57,47 @@ defmodule Memovee.OAuth.Revocation do
 
   defp token_grant_identity(raw_token) do
     with {:ok, jwks} <- KeyProvider.public_jwks(),
-         {:ok, claims} <-
-           TamaOAuth.JWT.verify_access_token(raw_token, jwks,
-             issuer: OAuth.issuer(),
-             audience: OAuth.resource(),
-             scopes: MCP.supported_scopes(),
-             algorithms: [OAuth.config(:signing_algorithm)]
-           ),
+         {:ok, claims} <- verify_revocable_access_token(raw_token, jwks),
          {:ok, token_id} <- Ecto.UUID.cast(claims["jti"]),
-         {grant_id, actor_id} <- AccessManager.grant_identity_for_token(token_id, "oauth_access") do
+         {grant_id, actor_id} <- AccessManager.grant_identity_for_access(token_id, claims) do
       {:ok, {grant_id, actor_id}}
     else
       _error -> refresh_grant_identity(raw_token)
     end
+  end
+
+  defp verify_revocable_access_token(raw_token, jwks) do
+    algorithm = OAuth.config(:signing_algorithm)
+
+    with {:ok, %{"alg" => ^algorithm, "kid" => kid}} <- JWT.peek_header(raw_token),
+         {:ok, key} <- JWKS.select(jwks, kid, algorithm, algorithms: [algorithm]),
+         {:ok, claims} <- JWT.verify_signature(raw_token, key, algorithm),
+         :ok <- validate_revocable_access_claims(claims) do
+      {:ok, claims}
+    else
+      _error -> {:error, :invalid_access_token}
+    end
+  end
+
+  defp validate_revocable_access_claims(claims) do
+    now = DateTime.to_unix(OAuth.now())
+    issued_at = claims["iat"]
+    expires_at = claims["exp"]
+    not_before = Map.get(claims, "nbf", issued_at)
+
+    valid? =
+      claims["iss"] == OAuth.issuer() and
+        Enum.all?(~w(sub aud client_id scope jti), &(is_binary(claims[&1]) and claims[&1] != "")) and
+        match?({:ok, _subject}, Ecto.UUID.cast(claims["sub"])) and
+        valid_revocation_times?(issued_at, expires_at, not_before, now)
+
+    if valid?, do: :ok, else: {:error, :invalid_access_token}
+  end
+
+  defp valid_revocation_times?(issued_at, expires_at, not_before, now) do
+    Enum.all?([issued_at, expires_at, not_before, now], &is_integer/1) and
+      issued_at <= now + @access_token_clock_skew_seconds and
+      not_before <= now + @access_token_clock_skew_seconds and expires_at > issued_at
   end
 
   defp refresh_grant_identity(raw_token) do

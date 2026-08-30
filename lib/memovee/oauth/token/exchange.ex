@@ -30,7 +30,7 @@ defmodule Memovee.OAuth.Token.Exchange do
            TokenRequest.parse(params, authorization_headers: authorization_headers),
          {:ok, metadata} <- Client.fetch(request.client_id),
          {:ok, _client_id} <- authenticate(request, metadata, authorization_headers) do
-      perform_exchange(request)
+      perform_exchange(request, metadata)
     else
       {:error, %Error{} = error} ->
         {:error, error}
@@ -46,18 +46,26 @@ defmodule Memovee.OAuth.Token.Exchange do
   def exchange(_params, _headers, _remote_ip),
     do: {:error, Error.new(:invalid_request, stage: :token_request)}
 
-  defp perform_exchange(%TokenRequest{grant_type: :authorization_code} = request) do
-    Repo.transact(fn -> exchange_code(request) end)
+  defp perform_exchange(%TokenRequest{grant_type: :authorization_code} = request, metadata) do
+    Repo.transact(fn -> exchange_code(request, metadata) end)
   end
 
-  defp perform_exchange(%TokenRequest{grant_type: :refresh_token} = request) do
+  defp perform_exchange(%TokenRequest{grant_type: :refresh_token} = request, metadata) do
+    if refresh_token_supported?(metadata) do
+      transact_refresh(request)
+    else
+      {:error, Error.new(:invalid_grant, stage: :client_grant_type)}
+    end
+  end
+
+  defp transact_refresh(request) do
     case Repo.transact(fn -> exchange_refresh(request) end) do
       {:ok, {:replay, %Error{} = error}} -> {:error, error}
       result -> result
     end
   end
 
-  defp exchange_code(request) do
+  defp exchange_code(request, metadata) do
     params = request.params
     now = OAuth.now()
     digest = TamaOAuth.Crypto.digest(params["code"])
@@ -69,7 +77,16 @@ defmodule Memovee.OAuth.Token.Exchange do
          :ok <- validate_code(request, grant, code, actor, now),
          {:ok, _code} <- CodeManager.consume(code, now),
          :ok <- revoke_active_refresh_tokens(grant.id, now),
-         {:ok, response} <- issue_tokens(grant, actor, nil, 0, now) do
+         {:ok, response} <-
+           issue_tokens(
+             grant,
+             actor,
+             nil,
+             0,
+             now,
+             nil,
+             code.refresh_token_allowed and refresh_token_supported?(metadata)
+           ) do
       Event.emit(:authorization_code_exchanged, %{
         client_id: grant.oauth_client_id,
         grant_id: grant.id,
@@ -106,7 +123,15 @@ defmodule Memovee.OAuth.Token.Exchange do
          {:ok, decision} <- evaluate_refresh(token, access, now),
          :ok <- rotate_refresh(token, access, now),
          {:ok, response} <-
-           issue_tokens(grant, actor, decision.family_id, decision.next_generation, now) do
+           issue_tokens(
+             grant,
+             actor,
+             decision.family_id,
+             decision.next_generation,
+             now,
+             token.expires_at,
+             true
+           ) do
       Event.emit(:refresh_succeeded, %{
         client_id: grant.oauth_client_id,
         grant_id: grant.id,
@@ -197,19 +222,29 @@ defmodule Memovee.OAuth.Token.Exchange do
     )
   end
 
-  defp issue_tokens(grant, actor, family_id, generation, now) do
+  defp issue_tokens(
+         grant,
+         actor,
+         family_id,
+         generation,
+         now,
+         family_expires_at,
+         issue_refresh?
+       ) do
     access_expires_at = DateTime.add(now, OAuth.config(:access_token_lifetime_seconds), :second)
-    refresh_expires_at = DateTime.add(now, OAuth.config(:refresh_token_lifetime_seconds), :second)
 
-    with {:ok, refresh_token, refresh_reference} <-
-           TokenManager.issue_oauth_refresh(actor, refresh_expires_at),
-         family_id = family_id || refresh_reference.id,
-         {:ok, _refresh_access} <-
-           AccessManager.create(refresh_reference, grant, %{
-             family_id: family_id,
-             generation: generation
-           }),
+    with {:ok, family_id, refresh_token} <-
+           maybe_issue_refresh(
+             grant,
+             actor,
+             family_id,
+             generation,
+             now,
+             family_expires_at,
+             issue_refresh?
+           ),
          {:ok, access_reference} <- TokenManager.issue_oauth_access(actor, access_expires_at),
+         family_id = family_id || access_reference.id,
          {:ok, _access} <-
            AccessManager.create(access_reference, grant, %{
              family_id: family_id,
@@ -219,16 +254,59 @@ defmodule Memovee.OAuth.Token.Exchange do
          {:ok, access_token, _claims} <-
            mint_access_token(grant, actor, access_reference, signing, now),
          {:ok, _grant} <- GrantManager.touch_usage(grant, now) do
-      {:ok,
-       %{
-         "access_token" => access_token,
-         "token_type" => "Bearer",
-         "expires_in" => OAuth.config(:access_token_lifetime_seconds),
-         "refresh_token" => refresh_token,
-         "scope" => grant.scope
-       }}
+      response =
+        %{
+          "access_token" => access_token,
+          "token_type" => "Bearer",
+          "expires_in" => OAuth.config(:access_token_lifetime_seconds),
+          "scope" => grant.scope
+        }
+        |> maybe_put_refresh_token(refresh_token)
+
+      {:ok, response}
     end
   end
+
+  defp maybe_issue_refresh(
+         grant,
+         actor,
+         family_id,
+         generation,
+         now,
+         family_expires_at,
+         true
+       ) do
+    refresh_expires_at =
+      family_expires_at ||
+        DateTime.add(now, OAuth.config(:refresh_token_lifetime_seconds), :second)
+
+    with {:ok, refresh_token, refresh_reference} <-
+           TokenManager.issue_oauth_refresh(actor, refresh_expires_at),
+         family_id = family_id || refresh_reference.id,
+         {:ok, _refresh_access} <-
+           AccessManager.create(refresh_reference, grant, %{
+             family_id: family_id,
+             generation: generation
+           }) do
+      {:ok, family_id, refresh_token}
+    end
+  end
+
+  defp maybe_issue_refresh(
+         _grant,
+         _actor,
+         family_id,
+         _generation,
+         _now,
+         _family_expires_at,
+         false
+       ),
+       do: {:ok, family_id, nil}
+
+  defp maybe_put_refresh_token(response, nil), do: response
+
+  defp maybe_put_refresh_token(response, refresh_token),
+    do: Map.put(response, "refresh_token", refresh_token)
 
   defp mint_access_token(grant, actor, access_reference, signing, now) do
     TamaOAuth.JWT.mint_access_token(
@@ -265,6 +343,8 @@ defmodule Memovee.OAuth.Token.Exchange do
     grant.resource == OAuth.resource() and
       match?({:ok, scope} when scope == grant.scope, MCP.normalize_scope(grant.scope))
   end
+
+  defp refresh_token_supported?(metadata), do: "refresh_token" in metadata.grant_types
 
   defp revoke_replayed_family(grant_id, family_id, now) do
     :ok =

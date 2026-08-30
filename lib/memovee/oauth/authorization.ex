@@ -93,7 +93,10 @@ defmodule Memovee.OAuth.Authorization do
          :ok <- validate_metadata(request, metadata),
          {:ok, grant} <- GrantManager.resolve_for_approval(actor, request),
          {raw_code, code_digest} <- opaque_credential(),
-         {:ok, _code} <- CodeManager.issue(grant, request, code_digest),
+         {:ok, _code} <-
+           CodeManager.issue(grant, request, code_digest,
+             refresh_token_allowed: "refresh_token" in metadata.grant_types
+           ),
          {:ok, request} <- RequestManager.transition(request, actor, "approve") do
       Event.emit(:authorization_approved, %{
         client_id: request.client_id,

@@ -11,6 +11,7 @@ defmodule Memovee.OAuth.Code do
     field :resource, :string
     field :scope, :string
     field :code_challenge, :string, redact: true
+    field :refresh_token_allowed, :boolean, default: false
     field :expires_at, :utc_datetime_usec
     field :consumed_at, :utc_datetime_usec
 
@@ -37,6 +38,7 @@ defmodule Memovee.OAuth.Code do
       :resource,
       :scope,
       :code_challenge,
+      :refresh_token_allowed,
       :expires_at
     ])
     |> unique_constraint(:code_digest)

@@ -28,14 +28,22 @@ defmodule Memovee.OAuth.Access.Manager do
     end
   end
 
-  def grant_identity_for_token(token_id, context) do
+  def grant_identity_for_access(token_id, claims) when is_map(claims) do
+    subject = claims["sub"]
+    client_id = claims["client_id"]
+    audience = claims["aud"]
+    scope = claims["scope"]
+
     Repo.one(
       from token in Token,
         join: access in Access,
         on: access.actor_token_id == token.id,
         join: grant in Grant,
         on: grant.id == access.oauth_grant_id,
-        where: token.id == ^token_id and token.context == ^context,
+        where:
+          token.id == ^token_id and token.context == "oauth_access" and
+            token.actor_id == ^subject and grant.oauth_client_id == ^client_id and
+            grant.resource == ^audience and grant.scope == ^scope,
         select: {grant.id, grant.actor_id}
     )
   end
@@ -86,13 +94,25 @@ defmodule Memovee.OAuth.Access.Manager do
 
   def token_cleanup_candidates(now, batch_size)
       when is_integer(batch_size) and batch_size > 0 do
+    active_refresh_families =
+      from(refresh_access in Access,
+        join: refresh_token in Token,
+        on: refresh_token.id == refresh_access.actor_token_id,
+        where:
+          refresh_token.context == "oauth_refresh" and is_nil(refresh_token.revoked_at) and
+            refresh_token.expires_at > ^now,
+        distinct: true,
+        select: refresh_access.family_id
+      )
+
     from(token in Token,
       join: access in Access,
       on: access.actor_token_id == token.id,
       where:
-        token.context in ["oauth_access", "oauth_refresh"] and
-          (token.expires_at <= ^now or
-             (token.context == "oauth_access" and not is_nil(token.revoked_at))),
+        ((token.context == "oauth_refresh" and token.expires_at <= ^now) or
+           (token.context == "oauth_access" and
+              (token.expires_at <= ^now or not is_nil(token.revoked_at)))) and
+          access.family_id not in subquery(active_refresh_families),
       order_by: [asc: token.expires_at, asc: token.id],
       limit: ^batch_size,
       select: {token.id, access.oauth_grant_id}

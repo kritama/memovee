@@ -184,6 +184,20 @@ defmodule Memovee.OAuth.AuthorizationTest do
 
     refute second["refresh_token"] == first["refresh_token"]
 
+    first_refresh =
+      Repo.get_by!(Token,
+        context: "oauth_refresh",
+        token: Token.oauth_token_digest(first["refresh_token"])
+      )
+
+    second_refresh =
+      Repo.get_by!(Token,
+        context: "oauth_refresh",
+        token: Token.oauth_token_digest(second["refresh_token"])
+      )
+
+    assert second_refresh.expires_at == first_refresh.expires_at
+
     assert {:error, %TamaOAuth.Error{code: :invalid_grant, stage: :refresh_replay}} =
              OAuth.exchange(%{
                "grant_type" => "refresh_token",
@@ -198,6 +212,30 @@ defmodule Memovee.OAuth.AuthorizationTest do
                "grant_type" => "refresh_token",
                "client_id" => client_id(),
                "refresh_token" => second["refresh_token"]
+             })
+  end
+
+  test "authorization-code-only clients do not receive or use refresh credentials" do
+    scope = user_scope_fixture()
+    register_grant_types(["authorization_code"])
+    %{code: code} = authorize(scope)
+
+    assert {:ok, tokens} = exchange_code(code)
+    refute Map.has_key?(tokens, "refresh_token")
+  end
+
+  test "refresh exchange follows the client's current registered grant capability" do
+    scope = user_scope_fixture()
+    %{code: code} = authorize(scope)
+    assert {:ok, tokens} = exchange_code(code)
+
+    register_grant_types(["authorization_code"])
+
+    assert {:error, %TamaOAuth.Error{code: :invalid_grant, stage: :client_grant_type}} =
+             OAuth.exchange(%{
+               "grant_type" => "refresh_token",
+               "client_id" => client_id(),
+               "refresh_token" => tokens["refresh_token"]
              })
   end
 
@@ -255,6 +293,57 @@ defmodule Memovee.OAuth.AuthorizationTest do
 
     assert {:ok, %{"active" => false}} =
              OAuth.introspect(%{"token" => tokens["access_token"]}, credentials)
+  end
+
+  test "an expired signed access token still revokes its refresh family" do
+    scope = user_scope_fixture()
+    %{code: code} = authorize(scope)
+    assert {:ok, tokens} = exchange_code(code)
+    assert {:ok, jwks} = KeyProvider.public_jwks()
+
+    assert {:ok, claims} =
+             TamaOAuth.JWT.verify_access_token(tokens["access_token"], jwks,
+               issuer: OAuth.issuer(),
+               audience: OAuth.resource(),
+               scopes: ["mcp.message"]
+             )
+
+    assert {:ok, signing} = KeyProvider.signing_key()
+    expired_now = OAuth.now() |> DateTime.add(-1_000, :second) |> DateTime.to_unix()
+    access_id = claims["jti"]
+
+    assert {:ok, expired_access_token, _claims} =
+             TamaOAuth.JWT.mint_access_token(
+               Map.take(claims, ~w(iss sub aud client_id scope jti)),
+               signing.key,
+               algorithm: signing.algorithm,
+               kid: signing.kid,
+               now: expired_now,
+               ttl: 10
+             )
+
+    Repo.update_all(
+      from(token in Token, where: token.id == ^access_id),
+      set: [expires_at: DateTime.add(OAuth.now(), -1, :second)]
+    )
+
+    replace_resource("https://tama.example/mcp/app-v2")
+
+    assert {:ok, :ok} =
+             OAuth.revoke(%{
+               "token" => expired_access_token,
+               "client_id" => client_id(),
+               "token_type_hint" => "access_token"
+             })
+
+    assert Repo.one!(Grant).current_state == "revoked"
+
+    assert {:error, %TamaOAuth.Error{code: :invalid_grant}} =
+             OAuth.exchange(%{
+               "grant_type" => "refresh_token",
+               "client_id" => client_id(),
+               "refresh_token" => tokens["refresh_token"]
+             })
   end
 
   test "rejects the wrong resource and an inactive user Actor" do
@@ -339,6 +428,28 @@ defmodule Memovee.OAuth.AuthorizationTest do
 
     client =
       original_clients |> Map.fetch!(client_id()) |> Map.put("redirect_uris", [callback_uri])
+
+    updated_config =
+      Keyword.put(
+        original_config,
+        :pre_registered_clients,
+        Map.put(original_clients, client_id(), client)
+      )
+
+    Cache.delete!({:client_metadata, client_id()})
+    Application.put_env(:memovee, OAuth, updated_config)
+
+    on_exit(fn ->
+      Application.put_env(:memovee, OAuth, original_config)
+      Cache.delete!({:client_metadata, client_id()})
+    end)
+  end
+
+  defp register_grant_types(grant_types) do
+    original_config = Application.fetch_env!(:memovee, OAuth)
+    original_clients = Keyword.fetch!(original_config, :pre_registered_clients)
+
+    client = original_clients |> Map.fetch!(client_id()) |> Map.put("grant_types", grant_types)
 
     updated_config =
       Keyword.put(

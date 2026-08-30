@@ -6,7 +6,7 @@ defmodule Memovee.OAuth.CleanupTest do
 
   alias Memovee.Accounts.Token
   alias Memovee.OAuth
-  alias Memovee.OAuth.{Access, Cleanup, Client, Code, Grant}
+  alias Memovee.OAuth.{Access, Cleanup, Client, Code, Grant, KeyProvider}
   alias Memovee.OAuth.Grant.Event, as: GrantEvent
   alias Memovee.Repo
 
@@ -82,6 +82,40 @@ defmodule Memovee.OAuth.CleanupTest do
     refute Repo.exists?(from code in Code, where: code.oauth_grant_id == ^first.grant.id)
     assert Repo.get!(Grant, second.grant.id)
     assert Repo.get_by!(GrantEvent, oauth_grant_id: second.grant.id, name: "revoke")
+  end
+
+  test "cleanup retains expired access references while their refresh family is active" do
+    scope = user_scope_fixture()
+    %{code: code} = authorize(scope)
+    assert {:ok, tokens} = exchange_code(code)
+    assert {:ok, jwks} = KeyProvider.public_jwks()
+
+    assert {:ok, claims} =
+             TamaOAuth.JWT.verify_access_token(tokens["access_token"], jwks,
+               issuer: OAuth.issuer(),
+               audience: OAuth.resource(),
+               scopes: ["mcp.message"]
+             )
+
+    refresh_digest = Token.oauth_token_digest(tokens["refresh_token"])
+    refresh = Repo.get_by!(Token, context: "oauth_refresh", token: refresh_digest)
+    access_id = claims["jti"]
+    expired_at = DateTime.add(OAuth.now(), -1, :second)
+
+    Repo.update_all(from(token in Token, where: token.id == ^access_id),
+      set: [expires_at: expired_at]
+    )
+
+    assert {:ok, :ok} = Cleanup.run_once()
+    assert Repo.get!(Token, access_id)
+
+    Repo.update_all(from(token in Token, where: token.id == ^refresh.id),
+      set: [expires_at: expired_at]
+    )
+
+    assert {:ok, :ok} = Cleanup.run_once()
+    refute Repo.get(Token, access_id)
+    refute Repo.get(Token, refresh.id)
   end
 
   defp authorize_and_revoke(scope) do

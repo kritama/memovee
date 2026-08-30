@@ -7,12 +7,15 @@ defmodule Memovee.OAuth.Code.Manager do
   alias Memovee.OAuth.{Code, Grant, Request}
   alias Memovee.Repo
 
-  def issue(%Grant{} = grant, %Request{} = request, digest) do
+  def issue(%Grant{} = grant, %Request{} = request, digest, opts \\ []) do
     expires_at =
       OAuth.now()
       |> DateTime.add(OAuth.config(:authorization_code_lifetime_seconds), :second)
 
-    %Code{oauth_grant_id: grant.id}
+    %Code{
+      oauth_grant_id: grant.id,
+      refresh_token_allowed: Keyword.get(opts, :refresh_token_allowed, false)
+    }
     |> Code.changeset(%{
       code_digest: digest,
       redirect_uri: request.redirect_uri,

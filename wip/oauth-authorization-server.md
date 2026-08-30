@@ -642,7 +642,8 @@ The transaction must:
 8. consume the code;
 9. revoke or replace an earlier refresh credential for the grant;
 10. create an access-token reference;
-11. create a refresh-token digest;
+11. create a refresh-token digest only when the approved and currently
+    validated client metadata both register the `refresh_token` grant;
 12. sign the access token; and
 13. commit all credential changes together.
 
@@ -653,7 +654,7 @@ The successful response is:
   "access_token": "<signed JWT>",
   "token_type": "Bearer",
   "expires_in": 600,
-  "refresh_token": "<opaque token>",
+  "refresh_token": "<opaque token, when registered>",
   "scope": "mcp.message"
 }
 ```
@@ -663,6 +664,8 @@ The successful response is:
 The initial implementation uses refresh-token rotation with family replay
 detection. A successful exchange invalidates the presented refresh credential,
 creates a replacement, and creates a new short-lived access-token reference.
+Every replacement carries forward the initial family's absolute expiration;
+rotation never restarts that lifetime.
 
 The refresh transaction must lock the grant first, then the refresh credential.
 It revalidates:
@@ -729,7 +732,9 @@ Requirements:
 - return a stable `kid` for each active verification key;
 - sign new tokens with exactly one configured active key;
 - permit an overlap window with the previous public key during rotation;
-- remove retired public keys only after every token they signed has expired;
+- retain retired public keys until every access reference they signed is no
+  longer retained as a revocation handle, which may extend through the related
+  refresh family's absolute lifetime;
 - set appropriate cache headers;
 - never log private keys or raw environment values; and
 - reject algorithms other than the configured asymmetric allowlist.
@@ -801,6 +806,14 @@ For a valid token family, revocation must:
 - invalidate every associated access-token reference;
 - invalidate every associated refresh token and rotation-family record; and
 - emit safe audit metadata without raw credentials.
+
+An access token remains usable as a revocation handle after its `exp` time: the
+server verifies its signature and immutable bindings without treating current
+expiry as authorization, then resolves its retained server-side reference.
+Expired access references remain until their refresh family can no longer be
+used, so cleanup cannot silently turn a disconnect request into a no-op.
+Revocation compares the signed audience and scope to the stored grant rather
+than requiring them to remain in the server's current issuance policy.
 
 The Memovee user must later receive a connected-applications UI that lists
 active grants and allows revocation by grant. The endpoint implementation is
