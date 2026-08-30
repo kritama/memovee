@@ -785,6 +785,9 @@ Unknown, expired, revoked, incorrectly bound, or inactive-Actor tokens return:
 Do not reveal why an unknown token is inactive. Rate limit introspection by
 resource-server identity and remote address. Tama may cache a positive result
 for a very short bounded interval, but the cache must never exceed token expiry.
+The active-reference check and usage touch run in one transaction that locks
+the Actor before the grant. A completed Actor deactivation or grant revocation
+therefore cannot be followed by a positive introspection response.
 
 ## Revocation
 

@@ -295,6 +295,47 @@ defmodule Memovee.OAuth.AuthorizationTest do
              OAuth.introspect(%{"token" => tokens["access_token"]}, credentials)
   end
 
+  test "introspection and revocation serialize without returning active afterward" do
+    scope = user_scope_fixture()
+    %{code: code} = authorize(scope)
+    assert {:ok, tokens} = exchange_code(code)
+    credentials = ["Bearer test-tama-introspection-secret"]
+
+    operations = [
+      fn -> OAuth.introspect(%{"token" => tokens["access_token"]}, credentials) end,
+      fn ->
+        OAuth.revoke(%{
+          "token" => tokens["access_token"],
+          "client_id" => client_id(),
+          "token_type_hint" => "access_token"
+        })
+      end
+    ]
+
+    results =
+      operations
+      |> Task.async_stream(fn operation -> operation.() end, timeout: :infinity)
+      |> Enum.map(fn {:ok, result} -> result end)
+
+    assert {:ok, :ok} in results
+
+    assert {:ok, %{"active" => false}} =
+             OAuth.introspect(%{"token" => tokens["access_token"]}, credentials)
+  end
+
+  test "introspection becomes inactive after Actor deactivation" do
+    scope = user_scope_fixture()
+    %{code: code} = authorize(scope)
+    assert {:ok, tokens} = exchange_code(code)
+    credentials = ["Bearer test-tama-introspection-secret"]
+
+    assert {:ok, %{resource: _actor}} =
+             Memovee.Accounts.transition_actor(scope.actor, scope.actor, :deactivate)
+
+    assert {:ok, %{"active" => false}} =
+             OAuth.introspect(%{"token" => tokens["access_token"]}, credentials)
+  end
+
   test "an expired signed access token still revokes its refresh family" do
     scope = user_scope_fixture()
     %{code: code} = authorize(scope)

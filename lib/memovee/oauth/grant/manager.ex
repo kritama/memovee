@@ -59,11 +59,13 @@ defmodule Memovee.OAuth.Grant.Manager do
     )
   end
 
-  def touch_usage(%Grant{} = grant, now) do
+  def touch_usage(%Grant{current_state: "active"} = grant, now) do
     grant
     |> Ecto.Changeset.change(last_used_at: now)
     |> Repo.update()
   end
+
+  def touch_usage(%Grant{}, _now), do: {:error, :inactive_grant}
 
   def cleanup_revoked(now, batch_size) when is_integer(batch_size) and batch_size > 0 do
     cutoff = DateTime.add(now, -OAuth.config(:revoked_grant_retention_seconds), :second)

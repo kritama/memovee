@@ -2,12 +2,14 @@ defmodule Memovee.OAuth.Introspection do
   @moduledoc "Authenticated, non-oracular access-token introspection."
 
   alias Memovee.Accounts.{Actor, Token}
+  alias Memovee.Accounts.Actor.Manager, as: ActorManager
   alias Memovee.OAuth
   alias Memovee.OAuth.{Access, Grant, JWKSCache, KeyProvider, RateLimiter}
   alias Memovee.OAuth.Access.Manager, as: AccessManager
   alias Memovee.OAuth.Client.ReplayStore
   alias Memovee.OAuth.Grant.Manager, as: GrantManager
   alias Memovee.OAuth.Tama.MCP
+  alias Memovee.Repo
   alias TamaOAuth.{ClientAuthentication, ClientMetadata, Error, TokenRequest}
 
   def introspect(params, credentials, remote_ip \\ nil) do
@@ -31,15 +33,29 @@ defmodule Memovee.OAuth.Introspection do
              algorithms: [OAuth.config(:signing_algorithm)]
            ),
          {:ok, token_id} <- Ecto.UUID.cast(claims["jti"]),
-         {%Token{} = token, %Access{} = access, %Grant{} = grant, %Actor{} = actor} <-
-           AccessManager.active_reference(token_id, OAuth.now()),
-         true <- valid_binding?(claims, token, access, grant, actor),
-         {:ok, response} <- TamaOAuth.Introspection.active(claims, grant.id),
-         {:ok, _grant} <- GrantManager.touch_usage(grant, OAuth.now()) do
-      {:ok, response}
+         {grant_id, actor_id} <- AccessManager.grant_identity_for_access(token_id, claims) do
+      introspect_reference(claims, token_id, grant_id, actor_id)
     else
       _error -> {:ok, TamaOAuth.Introspection.inactive()}
     end
+  end
+
+  defp introspect_reference(claims, token_id, grant_id, actor_id) do
+    Repo.transact(fn ->
+      now = OAuth.now()
+
+      with {:ok, %Actor{} = actor} <- ActorManager.get_active_user(actor_id, lock: :share),
+           {:ok, %Grant{current_state: "active"} = grant} <- GrantManager.lock(grant_id),
+           {%Token{} = token, %Access{} = access} <-
+             AccessManager.active_reference(token_id, actor.id, grant.id, now),
+           true <- valid_binding?(claims, token, access, grant, actor),
+           {:ok, response} <- TamaOAuth.Introspection.active(claims, grant.id),
+           {:ok, _grant} <- GrantManager.touch_usage(grant, now) do
+        {:ok, response}
+      else
+        _error -> {:ok, TamaOAuth.Introspection.inactive()}
+      end
+    end)
   end
 
   defp valid_binding?(claims, token, access, grant, actor) do

@@ -3,7 +3,7 @@ defmodule Memovee.OAuth.Access.Manager do
 
   import Ecto.Query
 
-  alias Memovee.Accounts.{Actor, Token}
+  alias Memovee.Accounts.Token
   alias Memovee.OAuth.{Access, Grant}
   alias Memovee.Repo
 
@@ -65,19 +65,16 @@ defmodule Memovee.OAuth.Access.Manager do
     |> Repo.update()
   end
 
-  def active_reference(token_id, now) do
+  def active_reference(token_id, actor_id, grant_id, now) do
     from(token in Token,
       join: access in Access,
       on: access.actor_token_id == token.id,
-      join: grant in Grant,
-      on: grant.id == access.oauth_grant_id,
-      join: actor in Actor,
-      on: actor.id == token.actor_id,
       where:
         token.id == ^token_id and token.context == "oauth_access" and
-          is_nil(token.revoked_at) and token.expires_at > ^now and grant.current_state == "active" and
-          actor.type == :user and actor.current_state == "active",
-      select: {token, access, grant, actor}
+          token.actor_id == ^actor_id and access.oauth_grant_id == ^grant_id and
+          is_nil(token.revoked_at) and token.expires_at > ^now,
+      lock: "FOR SHARE",
+      select: {token, access}
     )
     |> Repo.one()
   end
