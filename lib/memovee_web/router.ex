@@ -13,24 +13,54 @@ defmodule MemoveeWeb.Router do
     plug :fetch_current_scope_for_user
   end
 
-  pipeline :api do
+  pipeline :tama_api do
     plug :accepts, ["json"]
+    plug OpenApiSpex.Plug.PutApiSpec, module: MemoveeWeb.Tama.ApiSpec
   end
 
   pipeline :authenticated_api do
     plug MemoveeWeb.ApiAuth
   end
 
+  pipeline :oauth_api do
+    plug :accepts, ["json"]
+  end
+
+  scope "/", MemoveeWeb.Auth do
+    pipe_through :oauth_api
+
+    get "/.well-known/oauth-authorization-server", MetadataController, :authorization_server
+    get "/.well-known/jwks.json", JWKSController, :show
+  end
+
+  scope "/auth", MemoveeWeb.Auth do
+    pipe_through :oauth_api
+
+    post "/registrations", RegistrationController, :create
+    post "/tokens", TokenController, :create
+    post "/revocations", RevocationController, :create
+    post "/introspections", IntrospectionController, :create
+  end
+
   scope "/", MemoveeWeb do
     pipe_through :browser
 
     get "/", PageController, :home
+    get "/auth/authorizations/new", Auth.AuthorizationController, :new
   end
 
-  scope "/api", MemoveeWeb do
-    pipe_through [:api, :authenticated_api]
+  scope "/tama" do
+    pipe_through :tama_api
 
-    get "/principal", ApiPrincipalController, :show
+    get "/openapi", OpenApiSpex.Plug.RenderSpec, []
+  end
+
+  scope "/tama", MemoveeWeb.Tama do
+    pipe_through [:tama_api, :authenticated_api]
+
+    scope "/memory", Memory do
+      resources "/posts", PostController, only: [:create]
+    end
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
@@ -61,6 +91,7 @@ defmodule MemoveeWeb.Router do
       live "/console/agents", Console.AgentLive.Index, :index
       live "/console/agents/new", Console.AgentLive.New, :new
       live "/console/agents/:id", Console.AgentLive.Show, :show
+      live "/auth/consent/:handle", Auth.ConsentLive, :show
     end
 
     get "/users/settings/confirm-email/:token", Email.ConfirmationController, :show

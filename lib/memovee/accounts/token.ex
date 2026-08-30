@@ -26,6 +26,7 @@ defmodule Memovee.Accounts.Token do
 
     belongs_to :actor, Actor
     has_one :user, through: [:actor, :user]
+    has_one :oauth_access, Memovee.OAuth.Access, foreign_key: :actor_token_id
 
     timestamps(type: :utc_datetime_usec, updated_at: false)
   end
@@ -130,6 +131,35 @@ defmodule Memovee.Accounts.Token do
   def build_api_token(%Actor{}, _attrs), do: {:error, :inactive_actor}
 
   def hash_api_secret(secret) when is_binary(secret), do: :crypto.hash(@hash_algorithm, secret)
+
+  def build_oauth_access_reference(
+        %Actor{type: :user, current_state: "active", id: actor_id},
+        expires_at
+      ) do
+    %Token{
+      actor_id: actor_id,
+      token: :crypto.strong_rand_bytes(@rand_size),
+      context: "oauth_access",
+      expires_at: expires_at
+    }
+  end
+
+  def build_oauth_refresh_token(
+        %Actor{type: :user, current_state: "active", id: actor_id},
+        expires_at
+      ) do
+    raw_token = @rand_size |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)
+
+    {raw_token,
+     %Token{
+       actor_id: actor_id,
+       token: oauth_token_digest(raw_token),
+       context: "oauth_refresh",
+       expires_at: expires_at
+     }}
+  end
+
+  def oauth_token_digest(token) when is_binary(token), do: :crypto.hash(@hash_algorithm, token)
 
   defp normalize_usec(datetime) do
     datetime

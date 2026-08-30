@@ -1,0 +1,35 @@
+name: Set Up Project
+description: Install the Alpine and Mix dependencies required to build Memovee
+
+inputs:
+  cache-scope:
+    description: Distinguishes caches used by different workflows
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install Build Tools
+      shell: sh
+      run: |
+        apk add --no-cache build-base elixir erlang-dev erlang-dialyzer git tar zstd
+        mix local.hex --force
+        mix local.rebar --force
+
+    - name: Retrieve Cached Dependencies
+      uses: actions/cache@v5
+      with:
+        path: |
+          deps
+          _build
+          priv/plts
+        key: ${{ runner.os }}-alpine-elixir-packages-${{ inputs.cache-scope }}-${{ hashFiles('mise.toml') }}-${{ hashFiles('mix.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-alpine-elixir-packages-${{ inputs.cache-scope }}-${{ hashFiles('mise.toml') }}-
+
+    - name: Install Mix Dependencies
+      shell: sh
+      run: |
+        mkdir -p priv/plts
+        mix deps.get
+        mix compile --warnings-as-errors

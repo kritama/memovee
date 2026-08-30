@@ -1,0 +1,78 @@
+name: Create Release from Tag
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    container:
+      image: alpine:3.24
+    env:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      MIX_ENV: test
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set Up Project
+        uses: ./.github/actions/setup-project
+        with:
+          cache-scope: release
+
+      - name: Run Tests
+        run: mix test --trace --slowest 10
+
+  create-release:
+    name: Create Release
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        run: |
+          if PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null); then
+            CHANGELOG_RANGE="$PREV_TAG..HEAD"
+          else
+            CHANGELOG_RANGE="HEAD"
+          fi
+
+          echo "## Changes" > CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          git log "$CHANGELOG_RANGE" --pretty=format:"- %s (%h)" --no-merges >> CHANGELOG.md
+
+      - name: Create Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "Release ${{ github.ref_name }}" \
+            --notes-file CHANGELOG.md \
+            --draft

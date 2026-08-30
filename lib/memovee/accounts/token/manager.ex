@@ -92,6 +92,67 @@ defmodule Memovee.Accounts.Token.Manager do
 
   def verify_api_token(_client_id, _client_secret), do: {:error, :unauthorized}
 
+  def delete_oauth_if_expired(token_id, now) do
+    Repo.delete_all(
+      from(token in Token,
+        where:
+          token.id == ^token_id and token.context in ["oauth_access", "oauth_refresh"] and
+            (token.expires_at <= ^now or
+               (token.context == "oauth_access" and not is_nil(token.revoked_at)))
+      )
+    )
+
+    :ok
+  end
+
+  def issue_oauth_refresh(%Actor{} = actor, expires_at) do
+    {raw_token, reference} = Token.build_oauth_refresh_token(actor, expires_at)
+
+    case Repo.insert(reference) do
+      {:ok, persisted} -> {:ok, raw_token, persisted}
+      error -> error
+    end
+  end
+
+  def issue_oauth_access(%Actor{} = actor, expires_at) do
+    actor
+    |> Token.build_oauth_access_reference(expires_at)
+    |> Repo.insert()
+  end
+
+  def lock_oauth_refresh(digest) when is_binary(digest) do
+    Token
+    |> where([token], token.context == "oauth_refresh" and token.token == ^digest)
+    |> lock("FOR UPDATE")
+    |> Repo.one()
+    |> case do
+      %Token{} = token -> {:ok, token}
+      nil -> {:error, :invalid_grant}
+    end
+  end
+
+  def rotate_oauth_refresh(%Token{} = token, now) do
+    token
+    |> Ecto.Changeset.change(revoked_at: now, authenticated_at: now)
+    |> Repo.update()
+  end
+
+  def revoke_oauth(token_ids_query, now) do
+    Repo.update_all(
+      from(token in Token,
+        where: token.id in subquery(token_ids_query) and is_nil(token.revoked_at)
+      ),
+      set: [revoked_at: now]
+    )
+
+    :ok
+  end
+
+  def delete_oauth(token_ids_query) do
+    Repo.delete_all(from token in Token, where: token.id in subquery(token_ids_query))
+    :ok
+  end
+
   defp owned_api_token_query(owner_id, agent_id) do
     from credential in Token,
       join: relationship in Relationship,
