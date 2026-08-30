@@ -5,7 +5,7 @@ defmodule Memovee.Accounts.Actor.Manager do
 
   import Ecto.Query
 
-  alias Memovee.Accounts.Actor
+  alias Memovee.Accounts.{Actor, Relationship}
   alias Memovee.Repo
 
   def get_or_create_agent(identifier) when is_binary(identifier) do
@@ -13,15 +13,23 @@ defmodule Memovee.Accounts.Actor.Manager do
 
     if changeset.valid? do
       normalized_identifier = Ecto.Changeset.get_field(changeset, :identifier)
-
-      case Repo.get_by(Actor, identifier: normalized_identifier, type: :agent) do
-        %Actor{} = actor -> {:ok, actor}
-        nil -> insert_or_reload_agent(changeset, normalized_identifier)
-      end
+      insert_or_reload_agent(changeset, normalized_identifier)
     else
       {:error, changeset}
     end
   end
+
+  def get_or_create_system_agent("system:" <> suffix = identifier) when suffix != "" do
+    with {:ok, actor} <- get_or_create_agent(identifier),
+         false <- owned?(actor) do
+      {:ok, actor}
+    else
+      true -> {:error, :system_identifier_owned}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  def get_or_create_system_agent(_identifier), do: {:error, :invalid_system_identifier}
 
   def get(id, opts \\ []) do
     Actor
@@ -61,15 +69,22 @@ defmodule Memovee.Accounts.Actor.Manager do
   end
 
   defp insert_or_reload_agent(changeset, identifier) do
-    case Repo.insert(changeset) do
-      {:ok, actor} ->
-        {:ok, actor}
-
-      {:error, _changeset} = error ->
-        case Repo.get_by(Actor, identifier: identifier, type: :agent) do
-          %Actor{} = actor -> {:ok, actor}
-          nil -> error
-        end
+    case Repo.insert(changeset, on_conflict: :nothing, conflict_target: [:identifier]) do
+      {:ok, _actor} -> reload_agent(identifier)
+      {:error, _changeset} = error -> error
     end
+  end
+
+  defp reload_agent(identifier) do
+    case Repo.get_by(Actor, identifier: identifier, type: :agent) do
+      %Actor{} = actor -> {:ok, actor}
+      nil -> {:error, :invalid_actor}
+    end
+  end
+
+  defp owned?(%Actor{id: actor_id}) do
+    Relationship
+    |> where([relationship], relationship.target_actor_id == ^actor_id)
+    |> Repo.exists?()
   end
 end

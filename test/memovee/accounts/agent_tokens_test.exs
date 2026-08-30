@@ -113,6 +113,13 @@ defmodule Memovee.Accounts.AgentTokensTest do
       assert {:error, :unauthorized} =
                Agent.create(inactive_owner, %{identifier: "another-worker"})
     end
+
+    test "reserves the system identifier namespace for application-owned Actors", %{
+      owner: owner
+    } do
+      assert {:error, changeset} = Agent.create(owner, %{identifier: "  SYSTEM:OAuth  "})
+      assert "uses a reserved namespace" in errors_on(changeset).identifier
+    end
   end
 
   describe "agent API tokens" do

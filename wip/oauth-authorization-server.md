@@ -159,6 +159,9 @@ Tama       -> validates the token and derives the Memovee Actor from `sub`
   separate token contexts even when they share `actor_tokens` storage.
 - Use Memovee's UUIDv7 and per-schema Manager conventions throughout.
 - Use Eventful transitions for persisted OAuth request and grant lifecycles.
+- Reserve the `system:` Actor identifier namespace for unowned,
+  application-managed lifecycle Actors. The OAuth Actor is created with an
+  atomic conflict-tolerant insert and must never resolve to a user-owned agent.
 - Use `TamaOAuth` for shared protocol mechanics in both Memovee and Tama.
 - Keep all resource-specific policy and persistence behind application-owned
   modules or explicit `TamaOAuth` behaviours.
@@ -220,6 +223,11 @@ Memovee authorization-server metadata:
 Memovee JWKS:
   https://<memovee-host>/.well-known/jwks.json
 ```
+
+The Memovee issuer is an exact HTTPS origin with no trailing slash, path,
+query, fragment, or user information. Memovee's OAuth routes are root-relative,
+so accepting a path-bearing issuer would publish endpoints that the router does
+not serve.
 
 The configured Tama resource URI must match exactly in:
 

@@ -6,7 +6,7 @@ defmodule Memovee.OAuth.Actor do
   @identifier "system:oauth"
 
   def get do
-    case ActorManager.get_or_create_agent(@identifier) do
+    case ActorManager.get_or_create_system_agent(@identifier) do
       {:ok, actor} -> {:ok, actor}
       {:error, _reason} -> {:error, :system_actor_unavailable}
     end

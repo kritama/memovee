@@ -31,6 +31,30 @@ defmodule Memovee.OAuth do
   def resource, do: config(:resource)
   def now, do: DateTime.utc_now(:microsecond)
 
+  def validate_issuer!(issuer, opts \\ []) when is_binary(issuer) do
+    required_scheme = Keyword.get(opts, :scheme)
+
+    with {:ok, uri} <- URI.new(issuer),
+         true <- valid_issuer_origin?(uri, required_scheme) do
+      :ok
+    else
+      _invalid ->
+        raise ArgumentError,
+              "OAuth issuer must be an absolute origin without a path, query, fragment, or user info"
+    end
+  end
+
   def endpoint(path),
     do: URI.merge(issuer() <> "/", String.trim_leading(path, "/")) |> to_string()
+
+  defp valid_issuer_origin?(uri, required_scheme) do
+    is_binary(uri.scheme) and
+      is_binary(uri.host) and
+      uri.host != "" and
+      is_nil(uri.userinfo) and
+      is_nil(uri.path) and
+      is_nil(uri.query) and
+      is_nil(uri.fragment) and
+      (is_nil(required_scheme) or uri.scheme == required_scheme)
+  end
 end
