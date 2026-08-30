@@ -51,5 +51,10 @@ defmodule MemoveeWeb.Endpoint do
   plug Plug.MethodOverride
   plug Plug.Head
   plug Plug.Session, @session_options
+
+  plug MemoveeWeb.Plugs.TrustedProxy,
+    headers: ["x-forwarded-for"],
+    proxies: {MemoveeWeb.Plugs.TrustedProxy, :configured_proxies, []}
+
   plug MemoveeWeb.Router
 end

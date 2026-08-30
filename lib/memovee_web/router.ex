@@ -22,10 +22,31 @@ defmodule MemoveeWeb.Router do
     plug MemoveeWeb.ApiAuth
   end
 
+  pipeline :oauth_api do
+    plug :accepts, ["json"]
+  end
+
+  scope "/", MemoveeWeb.Auth do
+    pipe_through :oauth_api
+
+    get "/.well-known/oauth-authorization-server", MetadataController, :authorization_server
+    get "/.well-known/jwks.json", JWKSController, :show
+  end
+
+  scope "/auth", MemoveeWeb.Auth do
+    pipe_through :oauth_api
+
+    post "/registrations", RegistrationController, :create
+    post "/tokens", TokenController, :create
+    post "/revocations", RevocationController, :create
+    post "/introspections", IntrospectionController, :create
+  end
+
   scope "/", MemoveeWeb do
     pipe_through :browser
 
     get "/", PageController, :home
+    get "/auth/authorizations/new", Auth.AuthorizationController, :new
   end
 
   scope "/tama" do
@@ -70,6 +91,7 @@ defmodule MemoveeWeb.Router do
       live "/console/agents", Console.AgentLive.Index, :index
       live "/console/agents/new", Console.AgentLive.New, :new
       live "/console/agents/:id", Console.AgentLive.Show, :show
+      live "/auth/consent/:handle", Auth.ConsentLive, :show
     end
 
     get "/users/settings/confirm-email/:token", Email.ConfirmationController, :show

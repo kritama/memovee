@@ -85,6 +85,113 @@ if config_env() == :prod do
     ],
     secret_key_base: secret_key_base
 
+  oauth_issuer =
+    System.get_env("MEMOVEE_OAUTH_ISSUER") ||
+      raise "MEMOVEE_OAUTH_ISSUER is required in production"
+
+  tama_resource =
+    System.get_env("MEMOVEE_TAMA_MCP_APP_RESOURCE") ||
+      raise "MEMOVEE_TAMA_MCP_APP_RESOURCE is required in production"
+
+  signing_algorithm = System.get_env("MEMOVEE_OAUTH_SIGNING_ALGORITHM", "RS256")
+
+  signing_key_id =
+    System.get_env("MEMOVEE_OAUTH_SIGNING_KEY_ID") ||
+      raise "MEMOVEE_OAUTH_SIGNING_KEY_ID is required in production"
+
+  private_signing_key =
+    System.get_env("MEMOVEE_OAUTH_PRIVATE_SIGNING_KEY") ||
+      raise "MEMOVEE_OAUTH_PRIVATE_SIGNING_KEY is required in production"
+
+  private_signing_key =
+    case Jason.decode(private_signing_key) do
+      {:ok, %{} = key} -> key
+      _error -> raise "MEMOVEE_OAUTH_PRIVATE_SIGNING_KEY must be a JSON JWK"
+    end
+
+  public_signing_keys =
+    case System.get_env("MEMOVEE_OAUTH_PUBLIC_SIGNING_KEYS", "[]") |> Jason.decode() do
+      {:ok, keys} when is_list(keys) -> keys
+      _error -> raise "MEMOVEE_OAUTH_PUBLIC_SIGNING_KEYS must be a JSON array of JWKs"
+    end
+
+  trusted_proxies =
+    case System.get_env("MEMOVEE_TRUSTED_PROXIES") do
+      value when is_binary(value) ->
+        value
+        |> String.split(",", trim: true)
+        |> Enum.map(&String.trim/1)
+        |> Enum.reject(&(&1 == ""))
+
+      _missing ->
+        []
+    end
+
+  MemoveeWeb.Plugs.TrustedProxy.validate_proxies!(trusted_proxies)
+
+  unless signing_algorithm in ["RS256", "PS256", "ES256"] do
+    raise "MEMOVEE_OAUTH_SIGNING_ALGORITHM must be RS256, PS256, or ES256"
+  end
+
+  unless private_signing_key["kid"] == signing_key_id and
+           private_signing_key["alg"] in [nil, signing_algorithm] do
+    raise "MEMOVEE_OAUTH_PRIVATE_SIGNING_KEY must match the configured key ID and algorithm"
+  end
+
+  case Memovee.OAuth.KeyProvider.validate_signing_key(
+         private_signing_key,
+         signing_algorithm,
+         signing_key_id
+       ) do
+    :ok ->
+      :ok
+
+    {:error, :invalid_signing_key} ->
+      raise "MEMOVEE_OAUTH_PRIVATE_SIGNING_KEY must contain private signing material"
+  end
+
+  signing_keys =
+    [private_signing_key | public_signing_keys]
+    |> Enum.uniq_by(& &1["kid"])
+
+  case TamaOAuth.JWKS.public_document(signing_keys) do
+    {:ok, _jwks} -> :ok
+    {:error, _reason} -> raise "OAuth signing keys do not form a valid public JWKS"
+  end
+
+  introspection_client_id =
+    System.get_env("MEMOVEE_TAMA_INTROSPECTION_CLIENT_ID") ||
+      raise "MEMOVEE_TAMA_INTROSPECTION_CLIENT_ID is required in production"
+
+  introspection_jwks_uri =
+    System.get_env("MEMOVEE_TAMA_INTROSPECTION_JWKS_URI") ||
+      raise "MEMOVEE_TAMA_INTROSPECTION_JWKS_URI is required in production"
+
+  Memovee.OAuth.validate_issuer!(oauth_issuer)
+
+  Memovee.OAuth.validate_https_uri!(tama_resource,
+    label: "MEMOVEE_TAMA_MCP_APP_RESOURCE",
+    path: "/mcp/app",
+    query: false
+  )
+
+  Memovee.OAuth.validate_https_uri!(introspection_jwks_uri,
+    label: "MEMOVEE_TAMA_INTROSPECTION_JWKS_URI"
+  )
+
+  config :memovee, Memovee.OAuth,
+    issuer: oauth_issuer,
+    resource: tama_resource,
+    allow_local_client_metadata: false,
+    signing_algorithm: signing_algorithm,
+    signing_key_id: signing_key_id,
+    signing_keys: signing_keys,
+    introspection_client_id: introspection_client_id,
+    introspection_jwks_uri: introspection_jwks_uri,
+    introspection_bearer_token: nil
+
+  config :memovee, MemoveeWeb.Plugs.TrustedProxy, proxies: trusted_proxies
+
   # ## SSL Support
   #
   # To get SSL working, you will need to add the `https` key

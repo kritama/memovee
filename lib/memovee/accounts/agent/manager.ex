@@ -5,9 +5,12 @@ defmodule Memovee.Accounts.Agent.Manager do
 
   import Ecto.Query
 
+  alias Ecto.Changeset
   alias Ecto.Multi
   alias Memovee.Accounts.{Actor, Relationship}
   alias Memovee.Repo
+
+  @reserved_identifier_prefix "system:"
 
   def create(%Actor{id: owner_id}, attrs) do
     Multi.new()
@@ -23,7 +26,7 @@ defmodule Memovee.Accounts.Agent.Manager do
         nil -> {:error, :unauthorized}
       end
     end)
-    |> Multi.insert(:agent, Actor.agent_changeset(%Actor{}, attrs))
+    |> Multi.insert(:agent, change(%Actor{}, attrs))
     |> Multi.insert(:relationship, fn %{owner: owner, agent: agent} ->
       Relationship.owner_changeset(%Relationship{}, owner, agent)
     end)
@@ -58,7 +61,17 @@ defmodule Memovee.Accounts.Agent.Manager do
     transition_owned(owner_id, agent_id, Atom.to_string(event))
   end
 
-  def change(%Actor{} = actor, attrs \\ %{}), do: Actor.agent_changeset(actor, attrs)
+  def change(%Actor{} = actor, attrs \\ %{}) do
+    actor
+    |> Actor.agent_changeset(attrs)
+    |> Changeset.validate_change(:identifier, fn :identifier, identifier ->
+      if String.starts_with?(identifier, @reserved_identifier_prefix) do
+        [identifier: "uses a reserved namespace"]
+      else
+        []
+      end
+    end)
+  end
 
   defp transition_owned(owner_id, agent_id, transition) do
     Repo.transaction(fn ->

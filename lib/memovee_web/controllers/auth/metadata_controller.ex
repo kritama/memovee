@@ -1,0 +1,33 @@
+defmodule MemoveeWeb.Auth.MetadataController do
+  @moduledoc false
+
+  use MemoveeWeb, :controller
+
+  alias Memovee.OAuth
+  alias Memovee.OAuth.Tama.MCP
+  alias TamaOAuth.Metadata.AuthorizationServer
+
+  action_fallback MemoveeWeb.Auth.FallbackController
+
+  def authorization_server(conn, _params) do
+    with {:ok, metadata} <-
+           AuthorizationServer.build(
+             issuer: OAuth.issuer(),
+             authorization_endpoint: OAuth.endpoint("/auth/authorizations/new"),
+             token_endpoint: OAuth.endpoint("/auth/tokens"),
+             jwks_uri: OAuth.endpoint("/.well-known/jwks.json"),
+             registration_endpoint: OAuth.endpoint("/auth/registrations"),
+             revocation_endpoint: OAuth.endpoint("/auth/revocations"),
+             introspection_endpoint: OAuth.endpoint("/auth/introspections"),
+             protected_resources: [OAuth.resource()],
+             scopes_supported: MCP.supported_scopes(),
+             token_endpoint_auth_methods_supported: OAuth.config(:token_endpoint_auth_methods),
+             token_endpoint_auth_signing_alg_values_supported:
+               OAuth.config(:token_endpoint_auth_signing_algorithms)
+           ) do
+      conn
+      |> put_resp_header("cache-control", "public, max-age=300")
+      |> json(metadata)
+    end
+  end
+end
