@@ -167,15 +167,17 @@ if config_env() == :prod do
     System.get_env("MEMOVEE_TAMA_INTROSPECTION_JWKS_URI") ||
       raise "MEMOVEE_TAMA_INTROSPECTION_JWKS_URI is required in production"
 
-  Memovee.OAuth.validate_issuer!(oauth_issuer, scheme: "https")
+  Memovee.OAuth.validate_issuer!(oauth_issuer)
 
-  unless String.starts_with?(tama_resource, "https://") do
-    raise "MEMOVEE_TAMA_MCP_APP_RESOURCE must use HTTPS in production"
-  end
+  Memovee.OAuth.validate_https_uri!(tama_resource,
+    label: "MEMOVEE_TAMA_MCP_APP_RESOURCE",
+    path: "/mcp/app",
+    query: false
+  )
 
-  unless String.starts_with?(introspection_jwks_uri, "https://") do
-    raise "MEMOVEE_TAMA_INTROSPECTION_JWKS_URI must use HTTPS in production"
-  end
+  Memovee.OAuth.validate_https_uri!(introspection_jwks_uri,
+    label: "MEMOVEE_TAMA_INTROSPECTION_JWKS_URI"
+  )
 
   config :memovee, Memovee.OAuth,
     issuer: oauth_issuer,

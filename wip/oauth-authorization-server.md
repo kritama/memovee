@@ -880,8 +880,10 @@ library.
 
 The implementation uses the supervised `Memovee.Cache` backed by Nebulex's
 local adapter for bounded metadata and JWKS TTLs, negative refresh cooldowns,
-and per-cache-key JWKS refresh transactions. The OAuth cleanup worker remains
-application-owned and independent of the cache adapter.
+and per-cache-key metadata/JWKS refresh transactions. Explicit client metadata
+revalidation is coalesced only with the same in-flight refresh; subsequent
+consent checks still re-fetch even when the document is unchanged. The OAuth
+cleanup worker remains application-owned and independent of the cache adapter.
 
 ## Module structure
 
@@ -1014,8 +1016,11 @@ MEMOVEE_TAMA_INTROSPECTION_JWKS_URI
 Configuration also owns request, code, access-token, refresh-token, replay,
 registration, cleanup, cache, and rate-limit lifetimes.
 
-Production must require HTTPS issuer and resource identifiers. Localhost HTTP
-is allowed only in development and test.
+Production must parse and require absolute HTTPS issuer, resource, and
+introspection JWKS identifiers with non-empty hosts and no user information or
+fragments. The issuer is an exact origin, while the Tama resource requires the
+exact `/mcp/app` routed path and no query. Localhost HTTP is allowed only in
+development and test.
 
 ## Dependencies
 
