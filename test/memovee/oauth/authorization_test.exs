@@ -276,10 +276,8 @@ defmodule Memovee.OAuth.AuthorizationTest do
     %{code: code} = authorize(scope)
     assert {:ok, tokens} = exchange_code(code)
 
-    credentials = ["Bearer test-tama-introspection-secret"]
-
     assert {:ok, %{"active" => true} = response} =
-             OAuth.introspect(%{"token" => tokens["access_token"]}, credentials)
+             introspect_token(tokens["access_token"])
 
     assert response["sub"] == scope.actor.id
     assert response["grant_id"] == Repo.one!(Grant).id
@@ -292,17 +290,16 @@ defmodule Memovee.OAuth.AuthorizationTest do
              })
 
     assert {:ok, %{"active" => false}} =
-             OAuth.introspect(%{"token" => tokens["access_token"]}, credentials)
+             introspect_token(tokens["access_token"])
   end
 
   test "introspection and revocation serialize without returning active afterward" do
     scope = user_scope_fixture()
     %{code: code} = authorize(scope)
     assert {:ok, tokens} = exchange_code(code)
-    credentials = ["Bearer test-tama-introspection-secret"]
 
     operations = [
-      fn -> OAuth.introspect(%{"token" => tokens["access_token"]}, credentials) end,
+      fn -> introspect_token(tokens["access_token"]) end,
       fn ->
         OAuth.revoke(%{
           "token" => tokens["access_token"],
@@ -320,20 +317,19 @@ defmodule Memovee.OAuth.AuthorizationTest do
     assert {:ok, :ok} in results
 
     assert {:ok, %{"active" => false}} =
-             OAuth.introspect(%{"token" => tokens["access_token"]}, credentials)
+             introspect_token(tokens["access_token"])
   end
 
   test "introspection becomes inactive after Actor deactivation" do
     scope = user_scope_fixture()
     %{code: code} = authorize(scope)
     assert {:ok, tokens} = exchange_code(code)
-    credentials = ["Bearer test-tama-introspection-secret"]
 
     assert {:ok, %{resource: _actor}} =
              Memovee.Accounts.transition_actor(scope.actor, scope.actor, :deactivate)
 
     assert {:ok, %{"active" => false}} =
-             OAuth.introspect(%{"token" => tokens["access_token"]}, credentials)
+             introspect_token(tokens["access_token"])
   end
 
   test "an expired signed access token still revokes its refresh family" do
@@ -457,10 +453,28 @@ defmodule Memovee.OAuth.AuthorizationTest do
     refute Repo.exists?(Grant)
   end
 
+  test "prepared mode rejects consent and approval for a previously pending request" do
+    scope = user_scope_fixture()
+    assert {:ok, handle} = OAuth.start_authorization(authorization_params())
+
+    replace_mode(:prepared)
+
+    assert {:error, :invalid_consent} = OAuth.consent(scope, handle)
+    assert {:error, :authorization_policy_changed} = OAuth.approve(scope, handle)
+    refute Repo.exists?(Code)
+    refute Repo.exists?(Grant)
+  end
+
   defp replace_resource(resource) do
     original_config = Application.fetch_env!(:memovee, OAuth)
     on_exit(fn -> Application.put_env(:memovee, OAuth, original_config) end)
     Application.put_env(:memovee, OAuth, Keyword.put(original_config, :resource, resource))
+  end
+
+  defp replace_mode(mode) do
+    original_config = Application.fetch_env!(:memovee, OAuth)
+    on_exit(fn -> Application.put_env(:memovee, OAuth, original_config) end)
+    Application.put_env(:memovee, OAuth, Keyword.put(original_config, :mode, mode))
   end
 
   defp register_callback(callback_uri) do

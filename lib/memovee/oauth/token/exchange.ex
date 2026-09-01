@@ -8,6 +8,7 @@ defmodule Memovee.OAuth.Token.Exchange do
 
   alias Memovee.OAuth.{
     Client,
+    Client.Authentication,
     Event,
     Grant,
     KeyProvider,
@@ -15,17 +16,17 @@ defmodule Memovee.OAuth.Token.Exchange do
   }
 
   alias Memovee.OAuth.Access.Manager, as: AccessManager
-  alias Memovee.OAuth.Client.ReplayStore
   alias Memovee.OAuth.Code.Manager, as: CodeManager
   alias Memovee.OAuth.Grant.Manager, as: GrantManager
   alias Memovee.OAuth.Tama.MCP
   alias Memovee.Repo
-  alias TamaOAuth.{ClientAuthentication, Error, PKCE, RefreshToken, Scope, TokenRequest}
+  alias TamaOAuth.{Error, PKCE, RefreshToken, Scope, TokenRequest}
 
   def exchange(params, authorization_headers \\ [], remote_ip \\ nil)
 
   def exchange(params, authorization_headers, remote_ip) when is_map(params) do
-    with :ok <- rate_limit(remote_ip, params["client_id"]),
+    with :ok <- MCP.require_enabled(:invalid_grant),
+         :ok <- rate_limit(remote_ip, params["client_id"]),
          {:ok, request} <-
            TokenRequest.parse(params, authorization_headers: authorization_headers),
          {:ok, metadata} <- Client.fetch(request.client_id),
@@ -147,7 +148,7 @@ defmodule Memovee.OAuth.Token.Exchange do
   end
 
   defp authenticate(request, metadata, authorization_headers) do
-    ClientAuthentication.authenticate(
+    Authentication.authenticate(
       request.authentication_method,
       %{
         client_id: request.client_id,
@@ -155,11 +156,7 @@ defmodule Memovee.OAuth.Token.Exchange do
         params: request.params,
         authorization_headers: authorization_headers
       },
-      algorithms: OAuth.config(:token_endpoint_auth_signing_algorithms),
-      token_endpoint: OAuth.endpoint("/auth/tokens"),
-      clock_skew_seconds: OAuth.config(:client_assertion_clock_skew_seconds),
-      key_resolver: &Client.key/3,
-      claim_replay: &ReplayStore.claim/2
+      "/auth/tokens"
     )
   end
 
@@ -340,7 +337,7 @@ defmodule Memovee.OAuth.Token.Exchange do
   end
 
   defp current_grant_policy?(grant) do
-    grant.resource == OAuth.resource() and
+    MCP.enabled?() and grant.resource == OAuth.resource() and
       match?({:ok, scope} when scope == grant.scope, MCP.normalize_scope(grant.scope))
   end
 

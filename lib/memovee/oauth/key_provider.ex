@@ -4,78 +4,85 @@ defmodule Memovee.OAuth.KeyProvider do
   @behaviour TamaOAuth.KeyProvider
 
   alias Memovee.OAuth
-
-  @cache_key {__MODULE__, :development_key}
+  alias Memovee.OAuth.Tama.MCP
+  alias TamaOAuth.{JWKS, SigningKey}
 
   @impl true
   def signing_key do
-    with {:ok, keys} <- configured_or_development_keys(),
-         kid <- OAuth.config(:signing_key_id),
-         algorithm <- OAuth.config(:signing_algorithm, "RS256"),
-         %{} = key <- Enum.find(keys, &key_id?(&1, kid)) do
-      {:ok, %{kid: kid, algorithm: algorithm, key: key}}
+    if MCP.configured?() do
+      algorithm = OAuth.config(:signing_algorithm)
+      kid = OAuth.config(:signing_key_id)
+
+      case SigningKey.load(OAuth.config(:signing_key), signing_key_options(algorithm, kid)) do
+        {:ok, key} -> {:ok, %{algorithm: algorithm, kid: kid, key: key}}
+        _error -> {:error, :signing_key_unavailable}
+      end
     else
-      _ -> {:error, :signing_key_unavailable}
+      {:error, :signing_key_unavailable}
     end
   end
 
   @impl true
-  def verification_keys, do: configured_or_development_keys()
+  def verification_keys do
+    with {:ok, document} <- public_jwks() do
+      {:ok, document["keys"]}
+    end
+  end
 
   def public_jwks do
-    with {:ok, keys} <- verification_keys() do
-      TamaOAuth.JWKS.public_document(keys)
+    algorithm = OAuth.config(:signing_algorithm, "RS256")
+    overlap_keys = OAuth.config(:public_signing_keys, [])
+
+    with true <- MCP.configured?(),
+         {:ok, %{key: key}} <- signing_key(),
+         :ok <- validate_overlap_keys(overlap_keys, algorithm) do
+      JWKS.public_document([key | overlap_keys])
+    else
+      _error -> {:error, :signing_key_unavailable}
+    end
+  end
+
+  def validate_config! do
+    if MCP.configured?() do
+      case public_jwks() do
+        {:ok, _document} -> :ok
+        {:error, _reason} -> raise "invalid Memovee OAuth asymmetric signing-key configuration"
+      end
+    else
+      :ok
     end
   end
 
   def validate_signing_key(key, algorithm, kid) do
-    claims = %{
-      "iss" => "https://issuer.invalid",
-      "sub" => "signing-key-check",
-      "aud" => "https://resource.invalid",
-      "client_id" => "signing-key-check",
-      "scope" => "signing-key-check",
-      "jti" => "signing-key-check"
-    }
-
-    case TamaOAuth.JWT.mint_access_token(claims, key,
-           algorithm: algorithm,
-           kid: kid,
-           now: 0,
-           ttl: 1
-         ) do
-      {:ok, _token, _claims} -> :ok
+    case SigningKey.load(key, signing_key_options(algorithm, kid)) do
+      {:ok, _key} -> :ok
       {:error, _error} -> {:error, :invalid_signing_key}
     end
   end
 
-  defp configured_or_development_keys do
-    case OAuth.config(:signing_keys, []) do
-      keys when is_list(keys) and keys != [] -> {:ok, Enum.uniq_by(keys, &key_id/1)}
-      [] -> development_keys()
-    end
+  defp signing_key_options(algorithm, kid) do
+    [
+      algorithm: algorithm,
+      algorithms: [algorithm],
+      kid: kid,
+      stage: :oauth_signing_key
+    ]
   end
 
-  defp development_keys do
-    if Application.get_env(:memovee, :environment, :prod) == :prod do
-      {:error, :signing_key_unavailable}
+  defp validate_overlap_keys([], _algorithm), do: :ok
+
+  defp validate_overlap_keys(keys, algorithm) when is_list(keys) do
+    with {:ok, set} <- JWKS.validate(%{"keys" => keys}),
+         true <- Enum.all?(keys, &eligible_overlap_key?(set, &1, algorithm)) do
+      :ok
     else
-      {:ok, [:persistent_term.get(@cache_key, nil) || generate_development_key()]}
+      _error -> {:error, :invalid_jwks}
     end
   end
 
-  defp generate_development_key do
-    kid = OAuth.config(:signing_key_id)
-    jwk = JOSE.JWK.generate_key({:rsa, 2_048})
-    {_fields, key} = JOSE.JWK.to_map(jwk)
-    key = Map.merge(key, %{"kid" => kid, "alg" => "RS256", "use" => "sig"})
-    :persistent_term.put(@cache_key, key)
-    key
+  defp validate_overlap_keys(_keys, _algorithm), do: {:error, :invalid_jwks}
+
+  defp eligible_overlap_key?(set, key, algorithm) do
+    match?({:ok, _key}, JWKS.select(set, key["kid"], algorithm, algorithms: [algorithm]))
   end
-
-  defp key_id?(%{"kid" => kid}, kid), do: true
-  defp key_id?(_key, _kid), do: false
-
-  defp key_id(%{"kid" => kid}), do: kid
-  defp key_id(key), do: key
 end

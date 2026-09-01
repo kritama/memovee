@@ -1,7 +1,10 @@
 defmodule Memovee.OAuthFixtures do
   @moduledoc false
 
+  alias Memovee.Cache
   alias Memovee.OAuth
+
+  @introspection_kid "tama-test-introspection-rs256-1"
 
   def client_id, do: "http://127.0.0.1/client.json"
   def redirect_uri, do: "http://127.0.0.1/callback"
@@ -40,5 +43,46 @@ defmodule Memovee.OAuthFixtures do
       "redirect_uri" => redirect_uri(),
       "code_verifier" => verifier()
     })
+  end
+
+  def introspect_token(token) do
+    {params, credentials} = introspection_request(token)
+    OAuth.introspect(params, credentials)
+  end
+
+  def introspection_request(token) do
+    client_id = OAuth.config(:introspection_client_id)
+    jwks_uri = OAuth.config(:introspection_jwks_uri)
+    endpoint = OAuth.endpoint("/auth/introspections")
+
+    signing_key = Application.fetch_env!(:memovee, :test_tama_introspection_signing_key)
+
+    {:ok, public_jwks} = TamaOAuth.JWKS.public_document([signing_key])
+
+    :ok =
+      Cache.put!(
+        {:introspection_jwks, jwks_uri},
+        public_jwks,
+        ttl: :timer.minutes(5)
+      )
+
+    {:ok, assertion, _claims} =
+      TamaOAuth.ClientAssertion.mint(client_id, endpoint, signing_key,
+        algorithm: "RS256",
+        algorithms: ["RS256"],
+        kid: @introspection_kid,
+        jti: TamaOAuth.Crypto.opaque_token(),
+        now: OAuth.now() |> DateTime.to_unix(),
+        ttl: 60
+      )
+
+    params = %{
+      "token" => token,
+      "client_id" => client_id,
+      "client_assertion_type" => TamaOAuth.ClientAssertion.assertion_type(),
+      "client_assertion" => assertion
+    }
+
+    {params, []}
   end
 end

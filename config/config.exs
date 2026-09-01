@@ -32,11 +32,13 @@ config :memovee, Memovee.Cache,
   gc_memory_check_interval: :timer.seconds(30)
 
 config :memovee, Memovee.OAuth,
-  issuer: "http://localhost:4000",
-  resource: "http://localhost:4001/mcp/app",
+  mode: :disabled,
+  issuer: nil,
+  resource: nil,
   signing_algorithm: "RS256",
-  signing_key_id: "memovee-oauth-local-1",
-  signing_keys: [],
+  signing_key_id: nil,
+  signing_key: nil,
+  public_signing_keys: [],
   allowed_client_ids: [],
   allowed_client_id_prefixes: [
     "https://chatgpt.com/oauth/",
@@ -60,10 +62,13 @@ config :memovee, Memovee.OAuth,
   registration_touch_interval_seconds: 3_600,
   registration_cleanup_batch_size: 100,
   cleanup_interval_ms: 900_000,
+  client_assertion_max_bytes: 16_384,
+  client_assertion_max_lifetime_seconds: 300,
   client_assertion_clock_skew_seconds: 30,
-  introspection_client_id: "tama-mcp-app",
-  introspection_jwks_uri: nil,
-  introspection_bearer_token: nil
+  jwks_fetch_deadline_ms: 3_000,
+  allow_local?: false,
+  introspection_client_id: nil,
+  introspection_jwks_uri: nil
 
 config :memovee, MemoveeWeb.Plugs.TrustedProxy, proxies: []
 
@@ -121,6 +126,18 @@ config :logger, :default_formatter,
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
+
+config :phoenix, :filter_parameters, [
+  "access_token",
+  "authorization",
+  "client_assertion",
+  "client_secret",
+  "code",
+  "password",
+  "password_confirmation",
+  "refresh_token",
+  "token"
+]
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

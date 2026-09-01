@@ -45,9 +45,6 @@ config :phoenix,
   sort_verified_routes_query_params: true
 
 config :memovee, Memovee.OAuth,
-  issuer: "http://localhost:4002",
-  resource: "http://localhost:4001/mcp/app",
-  signing_key_id: "memovee-oauth-test-1",
   allow_local_client_metadata: true,
   pre_registered_clients: %{
     "http://127.0.0.1/client.json" => %{
@@ -59,5 +56,4 @@ config :memovee, Memovee.OAuth,
       "response_types" => ["code"],
       "token_endpoint_auth_methods_supported" => ["none"]
     }
-  },
-  introspection_bearer_token: "test-tama-introspection-secret"
+  }
