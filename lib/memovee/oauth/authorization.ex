@@ -15,7 +15,8 @@ defmodule Memovee.OAuth.Authorization do
   @authorization_response_query_keys ~w(code error error_description error_uri iss scope state)
 
   def start(params, remote_ip \\ nil) when is_map(params) do
-    with :ok <- rate_limit(remote_ip),
+    with :ok <- MCP.require_enabled(),
+         :ok <- rate_limit(remote_ip),
          {:ok, request} <-
            AuthorizationRequest.validate(params,
              resource: MCP.resource(),
@@ -117,7 +118,8 @@ defmodule Memovee.OAuth.Authorization do
   end
 
   defp validate_current_policy(request) do
-    with true <- request.resource == MCP.resource(),
+    with true <- MCP.enabled?(),
+         true <- request.resource == MCP.resource(),
          {:ok, scope} <- MCP.normalize_scope(request.scope),
          true <- scope == request.scope do
       :ok

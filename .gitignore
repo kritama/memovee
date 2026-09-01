@@ -43,3 +43,6 @@ npm-debug.log
 
 # Local opencode configuration
 /opencode.jsonc
+
+# Memovee CLI-owned local integration values and private signing key.
+/.memovee.integration.env

@@ -47,6 +47,37 @@ defmodule Memovee.OAuth.JWKSCacheTest do
              )
   end
 
+  test "passes bounded algorithms and loopback fetch policy to tama_oauth" do
+    cache_key = {__MODULE__, System.unique_integer([:positive, :monotonic])}
+    {:ok, current_jwks} = KeyProvider.public_jwks()
+    [%{"kid" => kid}] = current_jwks["keys"]
+    test_pid = self()
+
+    fetcher = fn jwks_uri, origin, options ->
+      send(test_pid, {:fetch_options, jwks_uri, origin, options})
+      TamaOAuth.JWKS.validate(current_jwks, algorithms: ["RS256"])
+    end
+
+    assert {:ok, %{"kid" => ^kid}} =
+             JWKSCache.select(
+               cache_key,
+               "http://127.0.0.1:4001/.well-known/jwks.json",
+               "http://127.0.0.1:4001/mcp/app",
+               kid,
+               "RS256",
+               ttl_ms: :timer.minutes(5),
+               allow_local?: true,
+               deadline: 1_250,
+               fetcher: fetcher
+             )
+
+    assert_receive {:fetch_options, _jwks_uri, _origin,
+                    [
+                      algorithms: ["RS256"],
+                      fetch_options: [allow_local?: true, deadline: 1_250]
+                    ]}
+  end
+
   test "coalesces concurrent refreshes for the same stale JWKS" do
     cache_key = {__MODULE__, System.unique_integer([:positive, :monotonic])}
     {:ok, current_jwks} = KeyProvider.public_jwks()

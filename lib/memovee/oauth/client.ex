@@ -35,7 +35,9 @@ defmodule Memovee.OAuth.Client do
            client_id,
            kid,
            algorithm,
-           ttl_ms: @cache_ttl_ms
+           ttl_ms: @cache_ttl_ms,
+           allow_local?: OAuth.config(:allow_local_client_metadata, false),
+           deadline: OAuth.config(:jwks_fetch_deadline_ms)
          ) do
       {:ok, selected} -> {:ok, selected}
       {:error, :temporarily_unavailable} -> {:error, :temporarily_unavailable}

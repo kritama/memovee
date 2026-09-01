@@ -4,7 +4,7 @@ defmodule Memovee.MixProject do
   def project do
     [
       app: :memovee,
-      version: "0.1.1",
+      version: "0.1.2",
       elixir: "~> 1.17",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
@@ -58,7 +58,7 @@ defmodule Memovee.MixProject do
       {:nebulex, "~> 3.0"},
       {:nebulex_local, "~> 3.0"},
       {:remote_ip, "~> 1.2"},
-      {:tama_oauth, "~> 0.1.0"},
+      {:tama_oauth, "~> 0.3.0"},
       {:postgrex, ">= 0.0.0"},
       {:phoenix_html, "~> 4.1"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},

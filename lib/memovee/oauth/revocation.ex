@@ -7,17 +7,19 @@ defmodule Memovee.OAuth.Revocation do
   alias Memovee.OAuth
   alias Memovee.OAuth.Access.Manager, as: AccessManager
   alias Memovee.OAuth.{Client, Event, KeyProvider, RateLimiter}
-  alias Memovee.OAuth.Client.ReplayStore
+  alias Memovee.OAuth.Client.Authentication
   alias Memovee.OAuth.Grant.Manager, as: GrantManager
+  alias Memovee.OAuth.Tama.MCP
   alias Memovee.Repo
-  alias TamaOAuth.{ClientAuthentication, Error, JWKS, JWT, TokenRequest}
+  alias TamaOAuth.{Error, JWKS, JWT, TokenRequest}
 
   @access_token_clock_skew_seconds 30
 
   def revoke(params, authorization_headers \\ [], remote_ip \\ nil)
 
   def revoke(params, authorization_headers, remote_ip) when is_map(params) do
-    with :ok <- rate_limit(remote_ip, params["client_id"]),
+    with :ok <- MCP.require_configured(),
+         :ok <- rate_limit(remote_ip, params["client_id"]),
          {:ok, request} <- TamaOAuth.Revocation.parse(params),
          {:ok, method} <- TokenRequest.detect_authentication(params, authorization_headers),
          {:ok, metadata} <- Client.fetch(request.client_id),
@@ -69,7 +71,8 @@ defmodule Memovee.OAuth.Revocation do
   defp verify_revocable_access_token(raw_token, jwks) do
     algorithm = OAuth.config(:signing_algorithm)
 
-    with {:ok, %{"alg" => ^algorithm, "kid" => kid}} <- JWT.peek_header(raw_token),
+    with {:ok, %{"alg" => ^algorithm, "kid" => kid}} <-
+           JWT.peek_access_token_header(raw_token, algorithms: [algorithm]),
          {:ok, key} <- JWKS.select(jwks, kid, algorithm, algorithms: [algorithm]),
          {:ok, claims} <- JWT.verify_signature(raw_token, key, algorithm),
          :ok <- validate_revocable_access_claims(claims) do
@@ -116,7 +119,7 @@ defmodule Memovee.OAuth.Revocation do
   end
 
   defp authenticate(method, client_id, params, metadata, authorization_headers) do
-    ClientAuthentication.authenticate(
+    Authentication.authenticate(
       method,
       %{
         client_id: client_id,
@@ -124,11 +127,7 @@ defmodule Memovee.OAuth.Revocation do
         params: params,
         authorization_headers: authorization_headers
       },
-      algorithms: OAuth.config(:token_endpoint_auth_signing_algorithms),
-      token_endpoint: OAuth.endpoint("/auth/revocations"),
-      clock_skew_seconds: OAuth.config(:client_assertion_clock_skew_seconds),
-      key_resolver: &Client.key/3,
-      claim_replay: &ReplayStore.claim/2
+      "/auth/revocations"
     )
   end
 

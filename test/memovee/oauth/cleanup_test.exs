@@ -118,6 +118,20 @@ defmodule Memovee.OAuth.CleanupTest do
     refute Repo.get(Token, refresh.id)
   end
 
+  test "disabled mode cleanup does not derive registration IDs from a nil issuer" do
+    original = Application.fetch_env!(:memovee, OAuth)
+    on_exit(fn -> Application.put_env(:memovee, OAuth, original) end)
+
+    disabled =
+      original
+      |> Keyword.put(:mode, :disabled)
+      |> Keyword.put(:issuer, nil)
+
+    Application.put_env(:memovee, OAuth, disabled)
+
+    assert {:ok, :ok} = Cleanup.run_once()
+  end
+
   defp authorize_and_revoke(scope) do
     %{code: code} = authorize(scope)
     assert {:ok, tokens} = exchange_code(code)

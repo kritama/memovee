@@ -16,9 +16,12 @@ defmodule Memovee.OAuth.JWKSCache do
       origin: origin,
       kid: kid,
       algorithm: algorithm,
+      algorithms: Keyword.get(opts, :algorithms, [algorithm]),
+      allow_local?: Keyword.get(opts, :allow_local?, false),
+      deadline: Keyword.get(opts, :deadline, 3_000),
       ttl_ms: Keyword.fetch!(opts, :ttl_ms),
       refresh_cooldown_ms: Keyword.get(opts, :refresh_cooldown_ms, @refresh_cooldown_ms),
-      fetcher: Keyword.get(opts, :fetcher, &TamaOAuth.JWKS.fetch/2)
+      fetcher: Keyword.get(opts, :fetcher, &TamaOAuth.JWKS.fetch/3)
     }
 
     case Cache.get!(cache_key) do
@@ -74,7 +77,7 @@ defmodule Memovee.OAuth.JWKSCache do
   end
 
   defp fetch_and_select(context) do
-    case context.fetcher.(context.jwks_uri, context.origin) do
+    case fetch(context) do
       {:ok, jwks} ->
         :ok = Cache.put!(context.cache_key, jwks, ttl: context.ttl_ms)
 
@@ -90,6 +93,17 @@ defmodule Memovee.OAuth.JWKSCache do
   end
 
   defp select_key(jwks, context) do
-    TamaOAuth.JWKS.select(jwks, context.kid, context.algorithm, algorithms: [context.algorithm])
+    TamaOAuth.JWKS.select(jwks, context.kid, context.algorithm, algorithms: context.algorithms)
+  end
+
+  defp fetch(%{fetcher: fetcher} = context) when is_function(fetcher, 3) do
+    fetcher.(context.jwks_uri, context.origin,
+      algorithms: context.algorithms,
+      fetch_options: [allow_local?: context.allow_local?, deadline: context.deadline]
+    )
+  end
+
+  defp fetch(%{fetcher: fetcher} = context) when is_function(fetcher, 2) do
+    fetcher.(context.jwks_uri, context.origin)
   end
 end

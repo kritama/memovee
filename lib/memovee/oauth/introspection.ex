@@ -6,15 +6,16 @@ defmodule Memovee.OAuth.Introspection do
   alias Memovee.OAuth
   alias Memovee.OAuth.{Access, Grant, JWKSCache, KeyProvider, RateLimiter}
   alias Memovee.OAuth.Access.Manager, as: AccessManager
-  alias Memovee.OAuth.Client.ReplayStore
+  alias Memovee.OAuth.Client.Authentication
   alias Memovee.OAuth.Grant.Manager, as: GrantManager
   alias Memovee.OAuth.Tama.MCP
   alias Memovee.Repo
-  alias TamaOAuth.{ClientAuthentication, ClientMetadata, Error, TokenRequest}
+  alias TamaOAuth.{ClientMetadata, Error, TokenRequest}
 
   def introspect(params, credentials, remote_ip \\ nil) do
-    with :ok <- rate_limit(remote_ip, params["client_id"] || credentials),
-         :ok <- authenticate_resource_server(params, credentials),
+    with :ok <- MCP.require_configured(:invalid_client),
+         :ok <- rate_limit(remote_ip, params["client_id"] || :unknown),
+         :ok <- authenticate_private_key_jwt(params, credentials),
          {:ok, raw_token} <- TamaOAuth.Introspection.parse_request(params) do
       active_or_inactive(raw_token)
     else
@@ -65,20 +66,6 @@ defmodule Memovee.OAuth.Introspection do
       claims["jti"] == token.id
   end
 
-  defp authenticate_resource_server(params, credentials) do
-    expected = OAuth.config(:introspection_bearer_token)
-
-    case credentials do
-      ["Bearer " <> presented] when is_binary(expected) and expected != "" ->
-        if TamaOAuth.Crypto.secure_compare(presented, expected),
-          do: :ok,
-          else: {:error, :invalid_client}
-
-      _headers ->
-        authenticate_private_key_jwt(params, credentials)
-    end
-  end
-
   defp authenticate_private_key_jwt(params, credentials) do
     client_id = OAuth.config(:introspection_client_id)
     jwks_uri = OAuth.config(:introspection_jwks_uri, nil)
@@ -100,7 +87,7 @@ defmodule Memovee.OAuth.Introspection do
          true <- params["client_id"] == client_id,
          {:ok, :private_key_jwt} <- TokenRequest.detect_authentication(params, credentials),
          {:ok, ^client_id} <-
-           ClientAuthentication.authenticate(
+           Authentication.authenticate(
              :private_key_jwt,
              %{
                client_id: client_id,
@@ -108,14 +95,12 @@ defmodule Memovee.OAuth.Introspection do
                params: params,
                authorization_headers: credentials
              },
-             algorithms: OAuth.config(:token_endpoint_auth_signing_algorithms),
-             token_endpoint: OAuth.endpoint("/auth/introspections"),
-             clock_skew_seconds: OAuth.config(:client_assertion_clock_skew_seconds),
-             key_resolver: &introspection_key/3,
-             claim_replay: &ReplayStore.claim/2
+             "/auth/introspections",
+             key_resolver: &introspection_key/3
            ) do
       :ok
     else
+      {:error, %Error{} = error} -> {:error, error}
       _ -> {:error, :invalid_client}
     end
   end
@@ -124,10 +109,12 @@ defmodule Memovee.OAuth.Introspection do
     case JWKSCache.select(
            {:introspection_jwks, jwks_uri},
            jwks_uri,
-           jwks_uri,
+           OAuth.resource(),
            kid,
            algorithm,
-           ttl_ms: :timer.minutes(5)
+           ttl_ms: :timer.minutes(5),
+           allow_local?: OAuth.config(:allow_local?),
+           deadline: OAuth.config(:jwks_fetch_deadline_ms)
          ) do
       {:ok, key} -> {:ok, key}
       {:error, :temporarily_unavailable} -> {:error, :temporarily_unavailable}
