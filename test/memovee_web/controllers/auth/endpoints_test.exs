@@ -47,6 +47,23 @@ defmodule MemoveeWeb.Auth.EndpointsTest do
     assert ["no-store"] = get_resp_header(conn, "cache-control")
   end
 
+  test "token mode gate precedes content-type validation", %{conn: conn} do
+    original = Application.fetch_env!(:memovee, Memovee.OAuth)
+    on_exit(fn -> Application.put_env(:memovee, Memovee.OAuth, original) end)
+
+    for mode <- [:disabled, :prepared] do
+      Application.put_env(:memovee, Memovee.OAuth, Keyword.put(original, :mode, mode))
+
+      response_conn =
+        conn
+        |> put_req_header("content-type", "application/json")
+        |> post("/auth/tokens", %{"grant_type" => "authorization_code"})
+
+      assert %{"error" => "invalid_grant"} = json_response(response_conn, 400)
+      assert ["no-store"] = get_resp_header(response_conn, "cache-control")
+    end
+  end
+
   test "introspection requires the configured Tama credential", %{conn: conn} do
     conn =
       conn
