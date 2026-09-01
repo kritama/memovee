@@ -12,6 +12,7 @@ defmodule Memovee.OAuth.Cleanup do
   alias Memovee.OAuth.Event
   alias Memovee.OAuth.Grant.Manager, as: GrantManager
   alias Memovee.OAuth.Request.Manager, as: RequestManager
+  alias Memovee.OAuth.Tama.MCP
   alias Memovee.Repo
 
   def start_link(_opts), do: GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
@@ -57,7 +58,7 @@ defmodule Memovee.OAuth.Cleanup do
            {:ok, code_continuation?} <- cleanup_codes(now, credential_batch_size),
            {:ok, token_continuation?} <- cleanup_tokens(now, credential_batch_size),
            {:ok, request_continuation?} <- RequestManager.cleanup(now) do
-        registration_continuation? = RegistrationManager.cleanup_abandoned(now)
+        registration_continuation? = cleanup_registrations(now)
 
         {:ok,
          Enum.any?([
@@ -82,6 +83,10 @@ defmodule Memovee.OAuth.Cleanup do
 
   defp schedule_continuation do
     Process.send_after(self(), :cleanup, :timer.seconds(1))
+  end
+
+  defp cleanup_registrations(now) do
+    if MCP.configured?(), do: RegistrationManager.cleanup_abandoned(now), else: false
   end
 
   defp cleanup_codes(now, batch_size) do

@@ -5,8 +5,14 @@ defmodule Memovee.Application do
 
   use Application
 
+  alias Memovee.OAuth.KeyProvider
+  alias Memovee.OAuth.Tama.MCP
+
   @impl true
   def start(_type, _args) do
+    :ok = MCP.validate_config!()
+    :ok = KeyProvider.validate_config!()
+
     children = [
       MemoveeWeb.Telemetry,
       Memovee.Repo,

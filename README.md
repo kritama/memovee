@@ -48,10 +48,12 @@ protected resource. Shared OAuth protocol mechanics come from the released
 `tama_oauth` Hex package; Memovee retains ownership of Actors, grants,
 persistence, consent, signing-key custody, and HTTP endpoints.
 
-Development uses a process-local asymmetric key. Production requires these
-environment variables:
+Development uses a process-local asymmetric key. To configure the integration
+in production, set its lifecycle mode explicitly to `prepared` or `enabled` and
+provide these environment variables:
 
 ```text
+MEMOVEE_TAMA_MCP_APP_MODE=prepared
 MEMOVEE_OAUTH_ISSUER
 MEMOVEE_TAMA_MCP_APP_RESOURCE
 MEMOVEE_OAUTH_SIGNING_ALGORITHM
@@ -61,6 +63,18 @@ MEMOVEE_OAUTH_PUBLIC_SIGNING_KEYS
 MEMOVEE_TAMA_INTROSPECTION_CLIENT_ID
 MEMOVEE_TAMA_INTROSPECTION_JWKS_URI
 ```
+
+Use `prepared` while deploying and verifying the signing and introspection trust
+configuration; this publishes the metadata and JWKS endpoints without allowing
+new authorization grants or token issuance. Change the mode to `enabled` only
+after Tama is ready to use the integration.
+
+Existing production deployments upgrading from an earlier OAuth configuration
+must add `MEMOVEE_TAMA_MCP_APP_MODE` before deploying this version. Set it to
+`enabled` to preserve active authorization and token behavior, or to `prepared`
+for a staged rollout. If the variable is omitted, production deliberately
+defaults to `disabled`, and the OAuth metadata and JWKS endpoints return 404.
+Use `disabled` only when intentionally shutting down the integration.
 
 The private signing key is a JSON JWK. `MEMOVEE_OAUTH_PUBLIC_SIGNING_KEYS` is a
 JSON array containing any previous public verification keys retained during a

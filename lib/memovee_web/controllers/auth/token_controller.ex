@@ -4,11 +4,13 @@ defmodule MemoveeWeb.Auth.TokenController do
   use MemoveeWeb, :controller
 
   alias Memovee.OAuth
+  alias Memovee.OAuth.Tama.MCP
 
   action_fallback MemoveeWeb.Auth.FallbackController
 
   def create(conn, params) do
-    with :ok <- require_form_encoding(conn),
+    with :ok <- MCP.require_enabled(:invalid_grant),
+         :ok <- require_form_encoding(conn),
          {:ok, response} <-
            OAuth.exchange(params, get_req_header(conn, "authorization"), conn.remote_ip) do
       conn

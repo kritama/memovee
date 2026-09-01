@@ -5,11 +5,13 @@ defmodule MemoveeWeb.Auth.RegistrationController do
 
   alias Memovee.OAuth.Client.Registration.Manager
   alias Memovee.OAuth.RateLimiter
+  alias Memovee.OAuth.Tama.MCP
 
   action_fallback MemoveeWeb.Auth.FallbackController
 
   def create(conn, params) do
-    with :ok <- require_json(conn),
+    with :ok <- MCP.require_enabled(),
+         :ok <- require_json(conn),
          :ok <- rate_limit(conn.remote_ip),
          {:ok, response} <- Manager.create(params) do
       conn

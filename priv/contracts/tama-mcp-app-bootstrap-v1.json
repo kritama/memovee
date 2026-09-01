@@ -1,0 +1,155 @@
+{
+  "schema_version": "1",
+  "compatibility_identifier": "tama-mcp-app-bootstrap-v1",
+  "supported_memovee_versions": ">= 0.1.1 and < 0.2.0",
+  "lifecycle": {
+    "default_production_mode": "disabled",
+    "modes": ["disabled", "prepared", "enabled"],
+    "configured_modes": ["prepared", "enabled"],
+    "enabled_modes": ["enabled"]
+  },
+  "variables": {
+    "MEMOVEE_TAMA_MCP_APP_MODE": {
+      "required": false,
+      "values": ["disabled", "prepared", "enabled"],
+      "x-sensitive": false
+    },
+    "MEMOVEE_OAUTH_ISSUER": {
+      "required_in": ["prepared", "enabled"],
+      "format": "absolute-origin",
+      "max_bytes": 2048,
+      "x-sensitive": false
+    },
+    "MEMOVEE_TAMA_MCP_APP_RESOURCE": {
+      "required_in": ["prepared", "enabled"],
+      "format": "absolute-uri",
+      "exact_path": "/mcp/app",
+      "max_bytes": 2048,
+      "x-sensitive": false
+    },
+    "MEMOVEE_OAUTH_SIGNING_ALGORITHM": {
+      "required_in": ["prepared", "enabled"],
+      "initial_value": "RS256",
+      "allowed_values": ["RS256", "PS256", "ES256"],
+      "x-sensitive": false
+    },
+    "MEMOVEE_OAUTH_SIGNING_KEY_ID": {
+      "required_in": ["prepared", "enabled"],
+      "format": "bounded-identifier",
+      "max_bytes": 128,
+      "x-sensitive": false
+    },
+    "MEMOVEE_OAUTH_PRIVATE_SIGNING_KEY": {
+      "required_in": ["prepared", "enabled"],
+      "format": "private-json-jwk",
+      "max_bytes": 65536,
+      "x-owner": "memovee-deployment",
+      "x-sensitive": true
+    },
+    "MEMOVEE_OAUTH_PUBLIC_SIGNING_KEYS": {
+      "required": false,
+      "default": "[]",
+      "format": "public-json-jwk-array",
+      "max_bytes": 2097152,
+      "max_items": 30,
+      "x-sensitive": false
+    },
+    "MEMOVEE_TAMA_INTROSPECTION_CLIENT_ID": {
+      "required_in": ["prepared", "enabled"],
+      "format": "bounded-identifier",
+      "max_bytes": 2048,
+      "x-sensitive": false
+    },
+    "MEMOVEE_TAMA_INTROSPECTION_JWKS_URI": {
+      "required_in": ["prepared", "enabled"],
+      "format": "absolute-uri",
+      "exact_path": "/.well-known/jwks.json",
+      "same_origin_as": "MEMOVEE_TAMA_MCP_APP_RESOURCE",
+      "max_bytes": 2048,
+      "x-sensitive": false
+    }
+  },
+  "public_endpoints": {
+    "authorization_server_metadata": "/.well-known/oauth-authorization-server",
+    "memovee_jwks": "/.well-known/jwks.json",
+    "introspection": "/auth/introspections"
+  },
+  "cache_policy": {
+    "authorization_server_metadata": "no-store",
+    "memovee_jwks": "public, max-age=300"
+  },
+  "availability": {
+    "disabled": {
+      "metadata": false,
+      "jwks": false,
+      "introspection": false,
+      "authorization": false,
+      "registration": false,
+      "revocation": false,
+      "token_issuance": false,
+      "resource_advertised": false
+    },
+    "prepared": {
+      "metadata": true,
+      "jwks": true,
+      "introspection": true,
+      "authorization": false,
+      "registration": false,
+      "revocation": true,
+      "token_issuance": false,
+      "resource_advertised": false
+    },
+    "enabled": {
+      "metadata": true,
+      "jwks": true,
+      "introspection": true,
+      "authorization": true,
+      "registration": true,
+      "revocation": true,
+      "token_issuance": true,
+      "resource_advertised": true
+    }
+  },
+  "mode_gate_responses": {
+    "disabled": {
+      "authorization": {"status": 503, "error": "temporarily_unavailable"},
+      "introspection": {"status": 401, "error": "invalid_client"},
+      "jwks": {"status": 404},
+      "metadata": {"status": 404},
+      "registration": {"status": 503, "error": "temporarily_unavailable"},
+      "revocation": {"status": 503, "error": "temporarily_unavailable"},
+      "token": {"status": 400, "error": "invalid_grant"}
+    },
+    "prepared": {
+      "authorization": {"status": 503, "error": "temporarily_unavailable"},
+      "introspection": {"available": true},
+      "jwks": {"available": true},
+      "metadata": {"available": true},
+      "registration": {"status": 503, "error": "temporarily_unavailable"},
+      "revocation": {"available": true},
+      "token": {"status": 400, "error": "invalid_grant"}
+    },
+    "enabled": {
+      "authorization": {"available": true},
+      "introspection": {"available": true},
+      "jwks": {"available": true},
+      "metadata": {"available": true},
+      "registration": {"available": true},
+      "revocation": {"available": true},
+      "token": {"available": true}
+    }
+  },
+  "local_development": {
+    "memovee_origin": "http://127.0.0.1:4000",
+    "tama_origin": "http://127.0.0.1:4001",
+    "resource": "http://127.0.0.1:4001/mcp/app",
+    "introspection_client_id": "http://127.0.0.1:4001/mcp/app/introspection",
+    "memovee_jwks_uri": "http://127.0.0.1:4000/.well-known/jwks.json",
+    "memovee_introspection_endpoint": "http://127.0.0.1:4000/auth/introspections",
+    "tama_jwks_uri": "http://127.0.0.1:4001/.well-known/jwks.json"
+  },
+  "local_loopback": {
+    "allowed_environments": ["dev", "test"],
+    "hosts": ["127.0.0.1", "localhost", "::1"]
+  }
+}
