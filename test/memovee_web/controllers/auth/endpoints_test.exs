@@ -64,6 +64,27 @@ defmodule MemoveeWeb.Auth.EndpointsTest do
     end
   end
 
+  test "disabled endpoint mode gates precede content-type validation", %{conn: conn} do
+    replace_oauth_config(mode: :disabled, minimal: true)
+
+    introspection_conn =
+      conn
+      |> put_req_header("content-type", "application/json")
+      |> post("/auth/introspections", %{"token" => "unknown"})
+
+    assert %{"error" => "invalid_client"} = json_response(introspection_conn, 401)
+    assert ["no-store"] = get_resp_header(introspection_conn, "cache-control")
+
+    revocation_conn =
+      introspection_conn
+      |> recycle()
+      |> put_req_header("content-type", "application/json")
+      |> post("/auth/revocations", %{"token" => "unknown"})
+
+    assert %{"error" => "temporarily_unavailable"} = json_response(revocation_conn, 503)
+    assert ["no-store"] = get_resp_header(revocation_conn, "cache-control")
+  end
+
   test "introspection requires the configured Tama credential", %{conn: conn} do
     conn =
       conn

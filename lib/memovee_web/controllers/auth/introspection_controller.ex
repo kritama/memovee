@@ -4,11 +4,13 @@ defmodule MemoveeWeb.Auth.IntrospectionController do
   use MemoveeWeb, :controller
 
   alias Memovee.OAuth
+  alias Memovee.OAuth.Tama.MCP
 
   action_fallback MemoveeWeb.Auth.FallbackController
 
   def create(conn, params) do
-    with :ok <- require_form_encoding(conn),
+    with :ok <- MCP.require_configured(:invalid_client),
+         :ok <- require_form_encoding(conn),
          {:ok, response} <-
            OAuth.introspect(params, get_req_header(conn, "authorization"), conn.remote_ip) do
       conn
