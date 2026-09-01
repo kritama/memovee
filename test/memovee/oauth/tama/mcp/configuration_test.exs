@@ -141,11 +141,11 @@ defmodule Memovee.OAuth.Tama.MCP.ConfigurationTest do
     end
   end
 
-  test ".envrc remains sourceable by Bash without direnv helpers" do
+  test ".envrc remains sourceable by a POSIX shell without direnv helpers" do
     envrc = Path.expand("../../../../../.envrc", __DIR__)
 
     assert {"", 0} =
-             System.cmd("bash", ["-c", ~S(source "$1"), "bash", envrc],
+             System.cmd("sh", ["-c", ~S(. "$1"), "sh", envrc],
                cd: System.tmp_dir!(),
                stderr_to_stdout: true
              )
