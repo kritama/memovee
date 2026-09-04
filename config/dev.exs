@@ -17,11 +17,13 @@ config :memovee, Memovee.Repo,
 # The watchers configuration can be used to run external
 # watchers to your application. For example, we can use it
 # to bundle .js and .css sources.
+local_origin = System.get_env("MEMOVEE_OAUTH_ISSUER", "https://app.localhost")
+local_uri = URI.parse(local_origin)
+
 config :memovee, MemoveeWeb.Endpoint,
-  # Binding to loopback ipv4 address prevents access from other machines.
-  # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
-  http: [ip: {127, 0, 0, 1}],
-  check_origin: false,
+  url: [scheme: local_uri.scheme, host: local_uri.host, port: local_uri.port],
+  http: [ip: {0, 0, 0, 0}],
+  check_origin: [local_origin],
   code_reloader: true,
   debug_errors: true,
   secret_key_base: "mrwmaZc+ttPAW1FoY0DJZhyVsGL0EciM2Vn5/RclSrhr1EaXEZtxmHnwwav0PB4z",

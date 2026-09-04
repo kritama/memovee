@@ -8,7 +8,6 @@ defmodule Memovee.OAuth.Tama.MCP do
   @scope "mcp.message"
   @supported_algorithms ["RS256", "PS256", "ES256"]
   @max_uri_bytes 2_048
-  @max_identifier_bytes 2_048
   @max_key_id_bytes 128
 
   @mode_gate_contract %{
@@ -97,10 +96,14 @@ defmodule Memovee.OAuth.Tama.MCP do
     with :ok <- validate_origin(configuration[:issuer], allow_local?, :issuer),
          :ok <- validate_endpoint(configuration[:resource], "/mcp/app", allow_local?, :resource),
          :ok <-
-           validate_trusted_endpoint(
+           validate_derived_tama_endpoint(
              configuration[:introspection_jwks_uri],
              "/.well-known/jwks.json",
-             configuration[:resource],
+             String.replace_suffix(
+               configuration[:resource],
+               "/mcp/app",
+               "/.well-known/jwks.json"
+             ),
              allow_local?,
              :introspection_jwks_uri
            ),
@@ -112,7 +115,13 @@ defmodule Memovee.OAuth.Tama.MCP do
              @max_key_id_bytes
            ),
          :ok <-
-           validate_identifier(configuration[:introspection_client_id], :introspection_client_id),
+           validate_derived_tama_endpoint(
+             configuration[:introspection_client_id],
+             "/mcp/app/introspection",
+             configuration[:resource] <> "/introspection",
+             allow_local?,
+             :introspection_client_id
+           ),
          :ok <- validate_public_signing_keys(configuration[:public_signing_keys]) do
       validate_bounds(configuration)
     end
@@ -149,10 +158,9 @@ defmodule Memovee.OAuth.Tama.MCP do
     if valid?, do: :ok, else: {:error, field}
   end
 
-  defp validate_trusted_endpoint(value, path, trust_uri, allow_local?, field) do
+  defp validate_derived_tama_endpoint(value, path, expected, allow_local?, field) do
     valid? =
-      validate_endpoint(value, path, allow_local?, field) == :ok and
-        URI.same_origin?(value, trust_uri)
+      value == expected and validate_endpoint(value, path, allow_local?, field) == :ok
 
     if valid?, do: :ok, else: {:error, field}
   end
@@ -160,8 +168,6 @@ defmodule Memovee.OAuth.Tama.MCP do
   defp validate_algorithm(algorithm) do
     if algorithm in @supported_algorithms, do: :ok, else: {:error, :signing_algorithm}
   end
-
-  defp validate_identifier(value, field, max_bytes \\ @max_identifier_bytes)
 
   defp validate_identifier(value, field, max_bytes)
        when is_binary(value) and byte_size(value) in 1..max_bytes//1 do
