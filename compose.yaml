@@ -12,11 +12,46 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d postgres" ]
       interval: 2s
       timeout: 5s
       retries: 10
       start_period: 5s
 
+  memovee:
+    build:
+      context: .
+      target: development
+    init: true
+    command:
+      - sh
+      - -lc
+      - mix deps.get && mix ecto.create && mix ecto.migrate && mix assets.setup && exec mix phx.server
+    env_file:
+      - ./tama/.memovee.integration.env
+    environment:
+      MIX_ENV: dev
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      PORT: 4000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - memovee_deps:/app/deps
+      - memovee_build:/app/_build
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 120s
+
 volumes:
   postgres_data:
+  memovee_deps:
+  memovee_build:
+
+include:
+  - ./tama/compose.yaml

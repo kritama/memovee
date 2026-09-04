@@ -1,0 +1,14 @@
+# Tama Kit local runtime
+/.tama.env
+/.tama.postgres.env
+
+# Tama Kit Terraform local state
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# Tama Kit MCP App integration
+/.memovee.integration.env
+
+# Tama Kit local HTTPS certificate material
+/tls/

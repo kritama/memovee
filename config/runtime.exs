@@ -23,9 +23,19 @@ end
 config :memovee, MemoveeWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
+oauth_get_env =
+  if config_env() == :test do
+    fn
+      "MEMOVEE_TAMA_MCP_APP_MODE" -> System.get_env("MEMOVEE_TAMA_MCP_APP_MODE_TEST")
+      name -> System.get_env(name)
+    end
+  else
+    &System.get_env/1
+  end
+
 config :memovee,
        Memovee.OAuth,
-       Memovee.OAuth.Tama.MCP.Configuration.load!(config_env())
+       Memovee.OAuth.Tama.MCP.Configuration.load!(config_env(), oauth_get_env)
 
 if config_env() == :dev do
   # Reload browser tabs when matching files change.

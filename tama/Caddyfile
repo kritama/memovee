@@ -1,0 +1,18 @@
+# Local override of the Tama Kit proxy: Memovee runs on the Compose network.
+app.localhost {
+  tls /etc/tama-kit/tls/local.pem /etc/tama-kit/tls/local-key.pem
+  reverse_proxy http://memovee:4000 {
+    header_up Host {host}
+    header_up X-Forwarded-Proto {scheme}
+    header_up X-Forwarded-Host {host}
+  }
+}
+
+tama.app.localhost {
+  tls /etc/tama-kit/tls/local.pem /etc/tama-kit/tls/local-key.pem
+  reverse_proxy http://tama:4000 {
+    header_up Host {host}
+    header_up X-Forwarded-Proto {scheme}
+    header_up X-Forwarded-Host {host}
+  }
+}

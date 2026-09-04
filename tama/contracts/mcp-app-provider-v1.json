@@ -1,0 +1,64 @@
+{
+  "schema_version": "1",
+  "kind": "tama-kit-mcp-app-local-provider-contract",
+  "compatibility_identifier": "tama-mcp-app-bootstrap-v1",
+  "scope": "local-development",
+  "source": {
+    "type": "generated",
+    "provider_contract_path": null,
+    "provider_contract_digest": null
+  },
+  "provider": {
+    "name": "memovee",
+    "environment_prefix": "MEMOVEE",
+    "environment_file": "tama/.memovee.integration.env"
+  },
+  "lifecycle": {
+    "modes": [
+      "disabled",
+      "prepared",
+      "enabled"
+    ]
+  },
+  "bindings": {
+    "mode": "MEMOVEE_TAMA_MCP_APP_MODE",
+    "issuer": "MEMOVEE_OAUTH_ISSUER",
+    "resource": "MEMOVEE_TAMA_MCP_APP_RESOURCE",
+    "access_token_signing_algorithm": "MEMOVEE_OAUTH_SIGNING_ALGORITHM",
+    "access_token_signing_key_id": "MEMOVEE_OAUTH_SIGNING_KEY_ID",
+    "access_token_private_signing_key": "MEMOVEE_OAUTH_PRIVATE_SIGNING_KEY",
+    "access_token_public_overlap_keys": "MEMOVEE_OAUTH_PUBLIC_SIGNING_KEYS",
+    "introspection_client_id": "MEMOVEE_TAMA_INTROSPECTION_CLIENT_ID",
+    "introspection_jwks_uri": "MEMOVEE_TAMA_INTROSPECTION_JWKS_URI"
+  },
+  "public_endpoints": {
+    "authorization_server_metadata": "/.well-known/oauth-authorization-server",
+    "jwks": "/.well-known/jwks.json",
+    "introspection": "/auth/introspections"
+  },
+  "environment_loading": {
+    "status": "verified",
+    "mechanism": "direnv",
+    "evidence_path": ".envrc"
+  },
+  "topology": {
+    "profile": "mcp-app-local-https",
+    "local_domain": "app.localhost",
+    "provider_host": "app.localhost",
+    "tama_host": "tama.app.localhost",
+    "provider_origin": "https://app.localhost",
+    "tama_origin": "https://tama.app.localhost",
+    "resource": "https://tama.app.localhost/mcp/app",
+    "health_url": "https://tama.app.localhost/",
+    "https_port": 443,
+    "provider_port": 4000,
+    "certificate_names": [
+      "app.localhost",
+      "tama.app.localhost"
+    ],
+    "trust_mechanism": "derived-image-ca-certificates",
+    "allowed_origins": [
+      "https://app.localhost"
+    ]
+  }
+}
