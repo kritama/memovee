@@ -63,6 +63,13 @@ Memovee must advertise and issue tokens from `https://app.localhost`, use
 JWKS through the HTTPS public name. Docker routing names must remain private
 transport details.
 
+Tama's `PHX_HOST=tama.app.localhost` is canonical for those Tama-owned
+values. Tama Kit derives the resource, introspection client ID, and Tama JWKS
+URL from `https://${PHX_HOST}` and writes the results into Memovee's provider
+fragment. Memovee must consume and cross-check those exact values; it must not
+load Tama's `PHX_HOST`, derive Tama URLs independently, or confuse that host
+with its own canonical issuer `https://app.localhost`.
+
 The runtime split is a required invariant:
 
 | Service | Effective environment | Listener |
@@ -85,6 +92,12 @@ regression coverage, but do not use it as a substitute for the real
 `MIX_ENV=dev` path. HTTP `.localhost`, cross-origin JWKS, paths, queries, and
 fragments remain rejected where required. The generated provider fragment,
 not a new hard-coded application default, owns the active bootstrap values.
+
+Treat the Tama resource as the anchor for the other Tama-owned provider
+bindings: its origin plus `/.well-known/jwks.json` must equal the configured
+Tama JWKS URI, and the resource plus `/introspection` must equal the
+introspection client ID. This detects drift if an old fragment carries
+independent values that disagree with Tama's canonical `PHX_HOST`.
 
 Remove the stale assertion against the deleted application-owned provider
 contract. Memovee may validate its configuration roles and runtime behavior,
@@ -160,6 +173,8 @@ Cover at least:
 - spoofed forwarding headers from an untrusted peer;
 - OAuth metadata, JWKS, authorization, token, revocation, and introspection
   using the exact public issuer;
+- exact agreement between the Tama resource, derived Tama JWKS URI, and
+  introspection client ID supplied by Tama Kit;
 - successful hostname-verified HTTPS retrieval of Tama JWKS through Caddy;
 - failure when the CA is untrusted, the certificate name is wrong, or Caddy is
   unavailable;
