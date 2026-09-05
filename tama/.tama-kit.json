@@ -40,7 +40,7 @@
       "providerIntrospectionEndpoint": "https://app.localhost/auth/introspections",
       "tamaJwksUri": "https://tama.app.localhost/.well-known/jwks.json",
       "healthUrl": "https://tama.app.localhost/",
-      "providerUpstream": "http://host.docker.internal:4000",
+      "providerUpstream": "http://memovee:4000",
       "tamaUpstream": "http://tama:4000",
       "providerPort": 4000,
       "tamaPort": 4000,
@@ -55,18 +55,18 @@
         "https://app.localhost"
       ]
     },
-    "tamaImage": "ghcr.io/upmaru/tama:0.13.2-server"
+    "tamaImage": "ghcr.io/upmaru/tama:0.13.3-server"
   },
   "managedFiles": {
-    "tama/.memovee.integration.env": "sha256:d081905741c0e20c7e041ed7bf7e5d4a4cde8df4751445aca9a6b96ebfe32513",
+    "tama/.memovee.integration.env": "sha256:27d64280693f521fe3daf4b7d1196423582ffe25e4c1dce0342e4da88c6dbe98",
     "tama/.tama.env.example": "sha256:c13c62ab100ef80719138e643ed0fa71dd32baa80fe9f071cf7af3c693f32e67",
-    "tama/AGENTS.md": "sha256:1d03934a5d1ce274241ab2b1b4b47eacab4797e8c5fc6aecd27008589bbe38c5",
-    "tama/Caddyfile": "sha256:4186c27989c7e06bf6b66408fccb8857f1ff1dde282cae20aff1dd04264e273b",
-    "tama/compose.yaml": "sha256:1027a67a244c181629b4c8cd56e113b9ec5fc5dbcdf6ea0a326b78713e348203",
+    "tama/AGENTS.md": "sha256:c07a3949a39efef431f50a86f97f122da0f3d3661b47c77a910999e5273f277f",
+    "tama/Caddyfile": "sha256:300e9c11b635018d59e99e912105cf024d54411e7792dbb6e74367a39e8fcb6b",
+    "tama/compose.yaml": "sha256:2a36013b2aec7bcced6edc05d95e0ddb9f24d32b118d32aef6198f5ed89ac913",
     "tama/contracts/mcp-app-provider-v1.json": "sha256:e288ea23cf4998bcae49169baf220f85e8e3d0e953152de27a7cab988f58b84c",
     "tama/main.tf": "sha256:830d4ab9b545bd4917bba681022bc3813d452513e5c66914672fc2a4dd3903bd",
-    "tama/README.md": "sha256:17dda8738c6ae8d7c58a423125aac4859228cc1d1dcc5e369ef747b051600261",
-    "tama/tama-local-ca.Dockerfile": "sha256:8a49980ac4b3b06c6d1b59a522a35e1f338c1424df6470c71d59ad48cc567279",
+    "tama/README.md": "sha256:54e1501ef72e6c64b63a02e47aa22f6f0fc98f2cc2c2465219284bc84bef9bbd",
+    "tama/tama-local-ca.Dockerfile": "sha256:10dd3ba33856067e2075c13cba2fd504b8ef44aff1dd6731c75b8657572667d1",
     "tama/versions.tf": "sha256:bf830d97c8234e1f439993dc422b3a9004ba4d69a794dd6cd6c988ac7f2acbba"
   }
 }

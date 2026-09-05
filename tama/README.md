@@ -67,8 +67,8 @@ The non-secret local bridge contract is managed at `tama/contracts/mcp-app-provi
 
 The exact provider issuer is `https://app.localhost`; the exact Tama resource is `https://tama.app.localhost/mcp/app`. Browser/MCP clients are limited to: `https://app.localhost`.
 
-Caddy is the public HTTPS entry point at `https://app.localhost` and `https://tama.app.localhost`. The private upstreams (http://host.docker.internal:4000 and http://tama:4000) are Docker routing details and must not be used as OAuth identities.
-The provider remains host-native in MIX_ENV=dev; Tama runs in the official release image with MIX_ENV=prod and trusts the public mkcert CA through the generated derived image.
+Caddy is the public HTTPS entry point at `https://app.localhost` and `https://tama.app.localhost`. The private upstreams (`http://memovee:4000` and `http://tama:4000`) are Docker routing details and must not be used as OAuth identities.
+The provider runs as the Compose-managed development service in `MIX_ENV=dev`; Tama runs in the official `0.13.3-server` release image with `MIX_ENV=prod`. The Memovee integration target and derived Tama image trust the public mkcert CA needed for reciprocal HTTPS checks.
 Verify the public runtime with `curl --cacert tama/tls/rootCA.pem https://tama.app.localhost/` after starting Compose.
 
-Activation is staged. Run bootstrap with `--start --activate` to verify prepared state and enable Tama. Tama Kit does not restart the host-native provider: set the provider mode variable to `enabled`, restart the provider, then rerun the same command. An enabled checkpoint is reported only after both live services pass verification.
+Activation is staged. Run bootstrap with `--start --activate` to verify prepared state and enable Tama. Set the provider mode variable to `enabled`, recreate the Compose-managed provider, then rerun the same command. An enabled checkpoint is reported only after both live services pass verification.
