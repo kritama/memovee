@@ -1,3 +1,43 @@
+FROM alpine:3.24 AS development
+
+ARG LOCAL_UID=1000
+ARG LOCAL_GID=1000
+
+RUN apk add --no-cache \
+    build-base \
+    ca-certificates \
+    curl \
+    elixir \
+    erlang-dev \
+    git \
+    inotify-tools && \
+    addgroup -g "${LOCAL_GID}" -S memovee && \
+    adduser -S -D -u "${LOCAL_UID}" -G memovee -h /home/memovee memovee && \
+    mkdir -p /app/deps /app/_build && \
+    chown -R memovee:memovee /app /home/memovee
+
+WORKDIR /app
+
+ENV HOME=/home/memovee
+ENV MIX_ENV=dev
+
+USER memovee
+
+RUN mix local.hex --force && \
+    mix local.rebar --force
+
+CMD ["mix", "phx.server"]
+
+FROM development AS development-local-ca
+
+USER root
+
+COPY tama/tls/rootCA.pem /usr/local/share/ca-certificates/tama-kit-local.crt
+RUN chmod 0644 /usr/local/share/ca-certificates/tama-kit-local.crt && \
+    update-ca-certificates
+
+USER memovee
+
 FROM alpine:3.24 AS build
 
 RUN apk add --no-cache build-base ca-certificates elixir erlang-dev git

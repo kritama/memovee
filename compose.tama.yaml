@@ -1,0 +1,38 @@
+# Opt-in Compose model for the generated Tama MCP App integration.
+services:
+  memovee:
+    build:
+      context: .
+      target: development-local-ca
+    init: true
+    command:
+      - sh
+      - -lc
+      - mix deps.get && mix ecto.create && mix ecto.migrate && mix assets.setup && exec mix phx.server
+    env_file:
+      - ./tama/.memovee.integration.env
+    environment:
+      MIX_ENV: dev
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      PORT: 4000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - memovee_deps:/app/deps
+      - memovee_build:/app/_build
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 120s
+
+volumes:
+  memovee_deps:
+  memovee_build:
+
+include:
+  - ./tama/compose.yaml

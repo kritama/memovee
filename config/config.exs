@@ -67,6 +67,7 @@ config :memovee, Memovee.OAuth,
   client_assertion_clock_skew_seconds: 30,
   jwks_fetch_deadline_ms: 3_000,
   allow_local?: false,
+  trusted_private_origins: [],
   introspection_client_id: nil,
   introspection_jwks_uri: nil
 

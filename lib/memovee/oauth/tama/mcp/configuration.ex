@@ -7,6 +7,7 @@ defmodule Memovee.OAuth.Tama.MCP.Configuration do
   @public_signing_keys_max_bytes 2_097_152
   @public_signing_key_limit 30
   @modes [:disabled, :prepared, :enabled]
+  @hostname_label ~r/\A[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\z/
 
   @required_environment ~w(
     MEMOVEE_OAUTH_ISSUER
@@ -54,6 +55,40 @@ defmodule Memovee.OAuth.Tama.MCP.Configuration do
   def public_signing_key_limit, do: @public_signing_key_limit
   def modes, do: @modes
   def required_environment, do: @required_environment
+
+  @doc false
+  def dns_hostname?(host) when is_binary(host) do
+    case :inet.parse_address(String.to_charlist(host)) do
+      {:ok, _address} -> false
+      {:error, _reason} -> hostname?(host)
+    end
+  rescue
+    _error -> false
+  end
+
+  def dns_hostname?(_host), do: false
+
+  @doc false
+  def trusted_private_origins(resource) do
+    case URI.parse(resource || "") do
+      %URI{
+        scheme: "https",
+        host: host,
+        port: port,
+        path: "/mcp/app",
+        query: nil,
+        fragment: nil,
+        userinfo: nil
+      }
+      when is_binary(host) and port in 1..65_535 ->
+        if dns_hostname?(host), do: [String.replace_suffix(resource, "/mcp/app", "")], else: []
+
+      _uri ->
+        []
+    end
+  rescue
+    _error -> []
+  end
 
   def load!(environment, get_env \\ &System.get_env/1)
 
@@ -122,6 +157,13 @@ defmodule Memovee.OAuth.Tama.MCP.Configuration do
   end
 
   defp configured(mode, values, allow_local?) do
+    values =
+      Keyword.put(
+        values,
+        :trusted_private_origins,
+        values |> Keyword.get(:resource) |> trusted_private_origins()
+      )
+
     [mode: mode]
     |> Keyword.merge(@bounds)
     |> Keyword.merge(values)
@@ -173,4 +215,12 @@ defmodule Memovee.OAuth.Tama.MCP.Configuration do
       raise "MEMOVEE_OAUTH_PUBLIC_SIGNING_KEYS must be a bounded JSON JWK array"
     end
   end
+
+  defp hostname?(host) when byte_size(host) in 1..253 do
+    host
+    |> String.split(".")
+    |> Enum.all?(&Regex.match?(@hostname_label, &1))
+  end
+
+  defp hostname?(_host), do: false
 end
