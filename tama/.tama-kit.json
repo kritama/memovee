@@ -65,7 +65,7 @@
     "tama/compose.yaml": "sha256:4a704faa3af6d359ddb918e907a18a396fa4ad2436f5cbed3294b26f07438ff0",
     "tama/contracts/mcp-app-provider-v1.json": "sha256:e288ea23cf4998bcae49169baf220f85e8e3d0e953152de27a7cab988f58b84c",
     "tama/main.tf": "sha256:830d4ab9b545bd4917bba681022bc3813d452513e5c66914672fc2a4dd3903bd",
-    "tama/README.md": "sha256:b774cc427aa1b5809e9ee6fefe3a99ef7735ca6b3f0b63d893eaa62c4fcd1ca6",
+    "tama/README.md": "sha256:0519d724200d916e46f56154ebe740eaeaf21e5e1c40df1ab31bdc7077c5c988",
     "tama/tama-local-ca.Dockerfile": "sha256:d82862addd59fb428178e2f68d53ac0cb44d3baef60677ba053c4894e9a2151d",
     "tama/versions.tf": "sha256:bf830d97c8234e1f439993dc422b3a9004ba4d69a794dd6cd6c988ac7f2acbba"
   }
