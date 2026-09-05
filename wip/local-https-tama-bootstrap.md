@@ -31,9 +31,10 @@ trusted-proxy, OAuth, or environment-loader behavior.
 - External HTTPS URL, broad listener, and trusted-proxy parsing currently live
   only inside the `config_env() == :prod` block. They are not active when
   Memovee runs in development.
-- `config/dev.exs` also sets `check_origin: false`; the managed proxy mode
-  needs an explicit external WebSocket origin without changing ordinary
-  standalone development.
+- `config/dev.exs` retains its loopback listener and permissive local origin
+  behavior unless the MCP App lifecycle explicitly selects prepared or enabled
+  mode; only that managed proxy mode enables the shared-network listener and
+  exact external WebSocket origin.
 - `.envrc` still looks for `./.memovee.integration.env`; current Tama Kit owns
   the generated provider fragment below `tama/`.
 - The application-owned provider contract was removed from `develop`, but

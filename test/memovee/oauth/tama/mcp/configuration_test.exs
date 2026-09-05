@@ -261,6 +261,21 @@ defmodule Memovee.OAuth.Tama.MCP.ConfigurationTest do
              )
   end
 
+  test ".envrc skips dotenv when the managed provider fragment is absent" do
+    envrc = Path.expand("../../../../../.envrc", __DIR__)
+    root = Path.join(System.tmp_dir!(), "memovee-envrc-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(root)
+    File.cp!(envrc, Path.join(root, ".envrc"))
+
+    on_exit(fn -> File.rm_rf!(root) end)
+
+    assert {"", 0} =
+             System.cmd("sh", ["-c", ~S|dotenv() { return 99; }; . ./.envrc|],
+               cd: root,
+               stderr_to_stdout: true
+             )
+  end
+
   defp production_environment(private_key, mode) do
     %{
       "MEMOVEE_TAMA_MCP_APP_MODE" => mode,

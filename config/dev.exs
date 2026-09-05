@@ -17,20 +17,38 @@ config :memovee, Memovee.Repo,
 # The watchers configuration can be used to run external
 # watchers to your application. For example, we can use it
 # to bundle .js and .css sources.
-local_origin = System.get_env("MEMOVEE_OAUTH_ISSUER", "https://app.localhost")
-local_uri = URI.parse(local_origin)
+endpoint_network =
+  case System.get_env("MEMOVEE_TAMA_MCP_APP_MODE") do
+    mode when mode in ["prepared", "enabled"] ->
+      local_origin = System.fetch_env!("MEMOVEE_OAUTH_ISSUER")
+      local_uri = URI.parse(local_origin)
 
-config :memovee, MemoveeWeb.Endpoint,
-  url: [scheme: local_uri.scheme, host: local_uri.host, port: local_uri.port],
-  http: [ip: {0, 0, 0, 0}],
-  check_origin: [local_origin],
-  code_reloader: true,
-  debug_errors: true,
-  secret_key_base: "mrwmaZc+ttPAW1FoY0DJZhyVsGL0EciM2Vn5/RclSrhr1EaXEZtxmHnwwav0PB4z",
-  watchers: [
-    esbuild: {Esbuild, :install_and_run, [:memovee, ~w(--sourcemap=inline --watch)]},
-    tailwind: {Tailwind, :install_and_run, [:memovee, ~w(--watch)]}
+      [
+        url: [scheme: local_uri.scheme, host: local_uri.host, port: local_uri.port],
+        http: [ip: {0, 0, 0, 0}],
+        check_origin: [local_origin]
+      ]
+
+    _mode ->
+      [
+        http: [ip: {127, 0, 0, 1}],
+        check_origin: false
+      ]
+  end
+
+endpoint_configuration =
+  [
+    code_reloader: true,
+    debug_errors: true,
+    secret_key_base: "mrwmaZc+ttPAW1FoY0DJZhyVsGL0EciM2Vn5/RclSrhr1EaXEZtxmHnwwav0PB4z",
+    watchers: [
+      esbuild: {Esbuild, :install_and_run, [:memovee, ~w(--sourcemap=inline --watch)]},
+      tailwind: {Tailwind, :install_and_run, [:memovee, ~w(--watch)]}
+    ]
   ]
+  |> Keyword.merge(endpoint_network)
+
+config :memovee, MemoveeWeb.Endpoint, endpoint_configuration
 
 # ## SSL Support
 #
