@@ -28,6 +28,16 @@ RUN mix local.hex --force && \
 
 CMD ["mix", "phx.server"]
 
+FROM development AS development-local-ca
+
+USER root
+
+COPY tama/tls/rootCA.pem /usr/local/share/ca-certificates/tama-kit-local.crt
+RUN chmod 0644 /usr/local/share/ca-certificates/tama-kit-local.crt && \
+    update-ca-certificates
+
+USER memovee
+
 FROM alpine:3.24 AS build
 
 RUN apk add --no-cache build-base ca-certificates elixir erlang-dev git

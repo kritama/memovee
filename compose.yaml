@@ -21,7 +21,7 @@ services:
   memovee:
     build:
       context: .
-      target: development
+      target: development-local-ca
     init: true
     command:
       - sh

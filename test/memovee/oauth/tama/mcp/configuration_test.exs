@@ -50,6 +50,7 @@ defmodule Memovee.OAuth.Tama.MCP.ConfigurationTest do
 
       assert configuration[:mode] == :enabled
       assert configuration[:allow_local?]
+      assert configuration[:trusted_private_origins] == []
       assert :ok = MCP.validate(configuration)
     end
   end
@@ -74,6 +75,7 @@ defmodule Memovee.OAuth.Tama.MCP.ConfigurationTest do
 
     assert configuration[:mode] == :prepared
     refute configuration[:allow_local?]
+    assert configuration[:trusted_private_origins] == ["https://tama.example"]
     assert :ok = MCP.validate(configuration)
   end
 
@@ -85,7 +87,64 @@ defmodule Memovee.OAuth.Tama.MCP.ConfigurationTest do
     assert configuration[:issuer] == "https://app.localhost"
     assert configuration[:resource] == "https://tama.app.localhost/mcp/app"
     assert configuration[:allow_local?]
+    assert configuration[:trusted_private_origins] == ["https://tama.app.localhost"]
     assert :ok = MCP.validate(configuration)
+  end
+
+  test "derives an exact private origin including a configured port", context do
+    environment =
+      context.private_key
+      |> production_environment("prepared")
+      |> replace_tama_origin("https://tama.example:8443")
+
+    configuration = Configuration.load!(:prod, &Map.get(environment, &1))
+
+    assert configuration[:trusted_private_origins] == ["https://tama.example:8443"]
+    assert :ok = MCP.validate(configuration)
+  end
+
+  test "does not trust HTTPS resources identified by IP literals or invalid hostnames", context do
+    hosts = [
+      "8.8.8.8",
+      "10.0.0.2",
+      "127.0.0.1",
+      "169.254.169.254",
+      "[fc00::1]",
+      "-tama.example",
+      "tama-.example",
+      "tama..example",
+      "tama.example."
+    ]
+
+    for host <- hosts do
+      environment =
+        context.private_key
+        |> production_environment("prepared")
+        |> replace_tama_origin("https://#{host}")
+
+      configuration = Configuration.load!(:prod, &Map.get(environment, &1))
+
+      assert configuration[:trusted_private_origins] == []
+      assert {:error, :resource} = MCP.validate(configuration)
+    end
+  end
+
+  test "rejects drift from the private origin derived from the Tama resource", context do
+    environment = local_https_environment(context.private_key, "prepared")
+    configuration = Configuration.load!(:dev, &Map.get(environment, &1))
+
+    for origins <- [
+          nil,
+          [],
+          ["http://tama.app.localhost"],
+          ["https://other.localhost"],
+          ["https://tama.app.localhost", "https://tama.app.localhost"]
+        ] do
+      assert {:error, :trusted_private_origins} =
+               configuration
+               |> Keyword.put(:trusted_private_origins, origins)
+               |> MCP.validate()
+    end
   end
 
   test "configured environments require exact Tama-derived trust identities", context do
@@ -229,5 +288,12 @@ defmodule Memovee.OAuth.Tama.MCP.ConfigurationTest do
         "https://tama.app.localhost/mcp/app/introspection",
       "MEMOVEE_TAMA_INTROSPECTION_JWKS_URI" => "https://tama.app.localhost/.well-known/jwks.json"
     }
+  end
+
+  defp replace_tama_origin(environment, origin) do
+    environment
+    |> Map.put("MEMOVEE_TAMA_MCP_APP_RESOURCE", origin <> "/mcp/app")
+    |> Map.put("MEMOVEE_TAMA_INTROSPECTION_CLIENT_ID", origin <> "/mcp/app/introspection")
+    |> Map.put("MEMOVEE_TAMA_INTROSPECTION_JWKS_URI", origin <> "/.well-known/jwks.json")
   end
 end

@@ -80,6 +80,20 @@ The private signing key is a JSON JWK. `MEMOVEE_OAUTH_PUBLIC_SIGNING_KEYS` is a
 JSON array containing any previous public verification keys retained during a
 rotation overlap. Tama authenticates introspection requests with
 `private_key_jwt`; no signing secret is shared between the services.
+For HTTPS resources, Memovee derives the one trusted private-network origin
+from `MEMOVEE_TAMA_MCP_APP_RESOURCE`. This permits only that configured Tama
+hostname to resolve to a private container-network address without disabling
+DNS pinning, certificate verification, or hostname verification. Loopback HTTP
+development remains governed separately by the local-development policy.
+
+The Compose-managed local Tama profile builds the `development-local-ca`
+Docker target. It extends the ordinary `development` target, installs only the
+generated public `tama/tls/rootCA.pem` into Alpine's existing CA bundle, then
+runs as the same unprivileged `memovee` user. The source, dependency, and build
+mounts remain unchanged, so Phoenix code reload continues to work. Ordinary
+development builds can still use `--target development` without generated
+certificate material.
+
 When Memovee runs behind a reverse proxy, the optional `MEMOVEE_TRUSTED_PROXIES`
 variable is a comma-separated list of the exact IP addresses or CIDR ranges
 allowed to supply `X-Forwarded-For`. When it is unset or empty, Memovee trusts no

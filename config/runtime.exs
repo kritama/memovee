@@ -33,9 +33,13 @@ oauth_get_env =
     &System.get_env/1
   end
 
-config :memovee,
-       Memovee.OAuth,
-       Memovee.OAuth.Tama.MCP.Configuration.load!(config_env(), oauth_get_env)
+oauth_configuration =
+  Memovee.OAuth.Tama.MCP.Configuration.load!(config_env(), oauth_get_env)
+
+config :memovee, Memovee.OAuth, oauth_configuration
+
+config :tama_oauth, TamaOAuth.RemoteJSON,
+  trusted_private_origins: Keyword.get(oauth_configuration, :trusted_private_origins, [])
 
 if config_env() == :dev do
   # Reload browser tabs when matching files change.

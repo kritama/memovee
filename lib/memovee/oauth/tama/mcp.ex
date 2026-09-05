@@ -95,6 +95,12 @@ defmodule Memovee.OAuth.Tama.MCP do
 
     with :ok <- validate_origin(configuration[:issuer], allow_local?, :issuer),
          :ok <- validate_endpoint(configuration[:resource], "/mcp/app", allow_local?, :resource),
+         :ok <- validate_tama_resource_hostname(configuration[:resource]),
+         :ok <-
+           validate_trusted_private_origins(
+             configuration[:trusted_private_origins],
+             configuration[:resource]
+           ),
          :ok <-
            validate_derived_tama_endpoint(
              configuration[:introspection_jwks_uri],
@@ -167,6 +173,22 @@ defmodule Memovee.OAuth.Tama.MCP do
 
   defp validate_algorithm(algorithm) do
     if algorithm in @supported_algorithms, do: :ok, else: {:error, :signing_algorithm}
+  end
+
+  defp validate_tama_resource_hostname(resource) do
+    valid? =
+      case parse_bounded_uri(resource) do
+        %Elixir.URI{scheme: "https", host: host} -> Configuration.dns_hostname?(host)
+        %Elixir.URI{} -> true
+        _uri -> false
+      end
+
+    if valid?, do: :ok, else: {:error, :resource}
+  end
+
+  defp validate_trusted_private_origins(origins, resource) do
+    expected = Configuration.trusted_private_origins(resource)
+    if origins == expected, do: :ok, else: {:error, :trusted_private_origins}
   end
 
   defp validate_identifier(value, field, max_bytes)
