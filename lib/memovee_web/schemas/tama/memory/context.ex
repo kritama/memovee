@@ -10,7 +10,12 @@ defmodule MemoveeWeb.Schemas.Tama.Memory.Context do
     required: [:actor_id, :origin_identifier],
     properties: %{
       actor_id: %Schema{type: :string, format: :uuid},
-      origin_identifier: %Schema{type: :string, minLength: 1, maxLength: 512}
+      origin_identifier: %Schema{
+        type: :string,
+        minLength: 1,
+        maxLength: 512,
+        pattern: ~r/^[^\x00]*$/
+      }
     }
   })
 end

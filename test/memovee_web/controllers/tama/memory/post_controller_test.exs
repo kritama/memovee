@@ -238,6 +238,48 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
              |> json_response(403)
   end
 
+  test "rejects NUL in origin identifiers before database access", %{
+    credential: credential,
+    context: context
+  } do
+    for origin <- [<<0>>, "message" <> <<0>> <> "identifier"] do
+      attrs = %{context: Map.put(context, "origin_identifier", origin), post: memory_post()}
+      conn = request(credential, "/tama/memory/posts", attrs)
+      assert %{"error" => %{"code" => "invalid_request"}} = json_response(conn, 422)
+      assert_operation_response(conn, "memory_post_create")
+    end
+
+    assert Repo.aggregate(Post, :count) == 0
+  end
+
+  test "source references are null or between 1 and 512 code points", %{
+    credential: credential,
+    context: context
+  } do
+    for {reference, index} <- Enum.with_index([nil, "a", String.duplicate("😀", 512)]) do
+      attrs = %{
+        "context" => Map.put(context, "origin_identifier", "reference-#{index}"),
+        "post" => put_in(memory_post(), ["metadata", "source", "reference"], reference)
+      }
+
+      assert_request_schema(attrs, "CreateMemoryPostRequest", ApiSpec.spec())
+      assert request(credential, "/tama/memory/posts", attrs).status == 201
+    end
+
+    count = Repo.aggregate(Post, :count)
+
+    for reference <- ["", String.duplicate("a", 513), String.duplicate("e\u0301", 257)] do
+      attrs = %{
+        context: context,
+        post: put_in(memory_post(), ["metadata", "source", "reference"], reference)
+      }
+
+      conn = request(credential, "/tama/memory/posts", attrs)
+      assert %{"error" => %{"code" => "invalid_request"}} = json_response(conn, 422)
+      assert Repo.aggregate(Post, :count) == count
+    end
+  end
+
   test "ordinary context assertions are rejected before validation", %{ordinary: ordinary} do
     assert %{"error" => %{"code" => "forbidden_context"}} =
              request(ordinary, "/tama/memory/posts", %{context: nil}) |> json_response(403)
@@ -261,6 +303,12 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
     build_conn()
     |> authorize(credential)
     |> post(path, attrs)
+  end
+
+  defp memory_post do
+    File.read!("tama/graph/schemas/memory-fixtures.v1.json")
+    |> Jason.decode!()
+    |> get_in(["extraction", Access.at(0), "expected", "post"])
   end
 
   defp authorize(conn, credential) do

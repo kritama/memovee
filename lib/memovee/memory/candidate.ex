@@ -49,7 +49,8 @@ defmodule Memovee.Memory.Candidate do
 
   defp source?(%{"channel" => "agent", "reference" => reference} = source) do
     map_size(source) == 2 and
-      (is_nil(reference) or (is_binary(reference) and String.length(reference) <= 512))
+      (is_nil(reference) or
+         (is_binary(reference) and length(String.codepoints(reference)) in 1..512))
   end
 
   defp source?(_), do: false

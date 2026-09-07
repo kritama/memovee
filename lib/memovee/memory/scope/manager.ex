@@ -87,6 +87,7 @@ defmodule Memovee.Memory.Scope.Manager do
   defp valid_context?(%{"actor_id" => id, "origin_identifier" => origin} = context) do
     map_size(context) == 2 and match?({:ok, _}, Ecto.UUID.cast(id)) and
       is_binary(origin) and String.trim(origin) != "" and
+      not String.contains?(origin, <<0>>) and
       length(String.codepoints(origin)) <= 512
   end
 
