@@ -23,5 +23,5 @@ resource "tama_prompt" "memory-index-generation-input" {
 
 resource "tama_class" "index-description-provider" {
   space_id    = tama_space.memory-index.id
-  schema_json = jsonencode(jsondecode(file("${path.module}/schemas/description-provider.json")))
+  schema_json = jsonencode(jsondecode(file("${path.module}/memory-index/description-provider.v1.json")))
 }

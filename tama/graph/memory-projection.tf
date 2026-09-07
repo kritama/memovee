@@ -2,7 +2,7 @@
 
 resource "tama_class" "memory-projection-request" {
   space_id    = tama_space.memory-index.id
-  schema_json = jsonencode(jsondecode(file("${path.module}/schemas/projection-request.json")))
+  schema_json = jsonencode(jsondecode(file("${path.module}/memory-projection/projection-request.v1.json")))
 }
 
 resource "tama_chain" "memory-projection" {

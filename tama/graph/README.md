@@ -27,12 +27,25 @@ Tama Kit rerun issue.
 
 ## Schemas and consumers
 
-`schemas/schemas.json` is the memory v1 data contract published in issue #9;
-Terraform reads it to define the root result classes. `schemas/fixtures.json`
-holds the examples from #16 for future tests; nothing currently consumes it.
-JSON schemas in `schemas/` are read directly by Terraform.
-Use lowercase kebab-case filenames, such as `memory-candidate-v1-provider.json`.
-The provider schemas wrap the domain value for structured model output.
+Use lowercase kebab-case names with a version suffix for every JSON schema and
+fixture file: `some-schema.v1.json`. Keep assets used by one Terraform file in a
+folder with the same basename as that file:
+
+- `memory-write/`: memory candidate provider schema.
+- `memory-query/`: query and answer candidate provider schemas.
+- `memory-index/`: description provider schema.
+- `memory-projection/`: projection request schema.
+- `remember-ingestion/`: ingestion template reserved for the future ingestion chain.
+
+`schemas/memory-contract.v1.json` is the shared memory data contract published in
+issue #9. `schemas.tf` loads it for the result classes in both `remember.tf` and
+`recall.tf`. `schemas/memory-fixtures.v1.json` holds the examples from #16 for
+future tests; nothing currently consumes it. The v1 bundle retains its gated
+v1.1 definitions; renaming files does not change contract versions or payloads.
+
+`corpora/` holds shared assets: `generation-input.md` is used by memory write,
+query and index; `json.liquid` is used by both roots. Provider schemas wrap the
+domain value for structured model output and are read directly by Terraform.
 Backend ownership, payload semantics and idempotency belong in #10's Elixir code
 and tests; Terraform configuration validation cannot enforce them.
 
