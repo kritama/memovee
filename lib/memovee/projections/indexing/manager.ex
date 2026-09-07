@@ -47,8 +47,7 @@ defmodule Memovee.Projections.Indexing.Manager do
       revision: post.memory_revision,
       fingerprint: fingerprint(value)
     }
-    |> change()
-    |> unique_constraint([:post_id, :revision, :profile])
+    |> Indexing.changeset()
     |> then(fn changeset ->
       Multi.new()
       |> Multi.insert(:projection, changeset)

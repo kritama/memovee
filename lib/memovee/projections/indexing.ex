@@ -22,4 +22,15 @@ defmodule Memovee.Projections.Indexing do
     has_many :events, Event
     timestamps(type: :utc_datetime)
   end
+
+  @doc false
+  def changeset(indexing, attrs \\ %{}) do
+    indexing
+    |> cast(attrs, [])
+    |> validate_required([:owner_actor_id, :post_id, :revision, :fingerprint, :profile])
+    |> foreign_key_constraint(:owner_actor_id)
+    |> foreign_key_constraint(:post_id)
+    |> check_constraint(:revision, name: :projection_revision_positive)
+    |> unique_constraint([:post_id, :revision, :profile])
+  end
 end
