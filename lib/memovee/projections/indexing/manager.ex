@@ -5,20 +5,29 @@ defmodule Memovee.Projections.Indexing.Manager do
   alias Ecto.Multi
   alias Jason.OrderedObject
   alias Memovee.Accounts.Actor
-  alias Memovee.Memory.{Post, Tag, Tagging}
+  alias Memovee.Memory.{Post, Scope, Tag, Tagging}
   alias Memovee.Projections.Indexing
   alias Memovee.Projections.Indexing.Worker
   alias Memovee.Repo
 
-  def get_for_post!(%Post{} = post) do
-    Repo.get_by!(Indexing,
-      post_id: post.id,
-      revision: post.memory_revision,
-      indexing_version: 1
-    )
+  def get_for_post(%Scope{} = scope, %Post{} = post) do
+    authorized_post(scope, post, fn current ->
+      case Repo.get_by(Indexing,
+             post_id: current.id,
+             revision: current.memory_revision,
+             indexing_version: 1
+           ) do
+        nil -> {:error, :not_found}
+        projection -> {:ok, projection}
+      end
+    end)
   end
 
-  def create(%Post{} = post) do
+  def create(%Scope{} = scope, %Post{} = post) do
+    authorized_post(scope, post, &create_for_post/1)
+  end
+
+  defp create_for_post(post) do
     tags =
       Repo.all(
         from tag in Tag,
@@ -69,15 +78,35 @@ defmodule Memovee.Projections.Indexing.Manager do
 
   def canonical_json(value), do: value |> order_keys() |> Jason.encode!()
 
-  def bump(%Post{} = post) do
-    Repo.transaction(fn ->
-      current = Repo.one!(from row in Post, where: row.id == ^post.id, lock: "FOR UPDATE")
-
+  def bump(%Scope{} = scope, %Post{} = post) do
+    authorized_post(scope, post, fn current ->
       with {:ok, updated} <-
              current |> change(memory_revision: current.memory_revision + 1) |> Repo.update(),
-           {:ok, _job} <- create(updated) do
-        updated
+           {:ok, _job} <- create_for_post(updated) do
+        {:ok, updated}
       else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+  end
+
+  defp authorized_post(scope, post, operation) do
+    Repo.transaction(fn ->
+      scope =
+        case Scope.refresh(scope) do
+          {:ok, refreshed} -> refreshed
+          {:error, reason} -> Repo.rollback(reason)
+        end
+
+      current =
+        Repo.one(
+          from row in Post,
+            where: row.id == ^post.id and row.owner_actor_id == ^scope.owner.id,
+            lock: "FOR UPDATE"
+        ) || Repo.rollback(:not_found)
+
+      case operation.(current) do
+        {:ok, result} -> result
         {:error, reason} -> Repo.rollback(reason)
       end
     end)

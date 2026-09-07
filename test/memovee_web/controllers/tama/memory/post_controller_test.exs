@@ -366,6 +366,8 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
         "post",
         "properties",
         "tags",
+        "allOf",
+        Access.at(0),
         "items",
         "properties",
         "key"
@@ -472,5 +474,86 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
 
     assert conn.status == 201
     assert_operation_response(conn, "memory_post_create")
+  end
+
+  test "tag capacity is enforced by both the request schema and runtime", %{
+    credential: credential,
+    context: context
+  } do
+    tags =
+      for index <- 1..12,
+          do: %{"namespace" => "topic", "key" => "tag-#{index}", "name" => "Tag #{index}"}
+
+    attrs = %{"context" => context, "post" => Map.put(memory_post(), "tags", tags)}
+
+    # The casting helper does not implement OpenAPI's not keyword.
+    spec = ApiSpec.spec()
+    schema = spec.components.schemas["CreateMemoryPostRequest"].properties.post.properties.tags
+
+    assert {:error, _} =
+             OpenApiSpex.DeprecatedCast.validate(
+               schema,
+               Enum.map(tags, &%{namespace: &1["namespace"], key: &1["key"], name: &1["name"]}),
+               "tags",
+               spec.components.schemas
+             )
+
+    assert request(credential, "/tama/memory/posts", attrs).status == 422
+
+    kind = memory_post()["metadata"]["kind"]
+
+    for {accepted, index} <-
+          Enum.with_index([
+            Enum.take(tags, 11),
+            Enum.take(tags, 11) ++
+              [%{"namespace" => "kind", "key" => kind, "name" => String.capitalize(kind)}]
+          ]) do
+      attrs = %{
+        "context" => Map.put(context, "origin_identifier", "capacity-#{index}"),
+        "post" => Map.put(memory_post(), "tags", accepted)
+      }
+
+      assert_request_schema(attrs, "CreateMemoryPostRequest", ApiSpec.spec())
+
+      assert :ok =
+               OpenApiSpex.DeprecatedCast.validate(
+                 schema,
+                 Enum.map(
+                   accepted,
+                   &%{namespace: &1["namespace"], key: &1["key"], name: &1["name"]}
+                 ),
+                 "tags",
+                 spec.components.schemas
+               )
+
+      conn = request(credential, "/tama/memory/posts", attrs)
+      assert conn.status == 201
+      assert_operation_response(conn, "memory_post_create")
+      assert length(json_response(conn, 201)["data"]["receipt"]["tag_ids"]) == 12
+    end
+  end
+
+  test "nonblank origin and tag name requirements are published", %{
+    credential: credential,
+    context: context
+  } do
+    post = memory_post()
+
+    for attrs <- [
+          %{"context" => Map.put(context, "origin_identifier", " \n\t "), "post" => post},
+          %{
+            "context" => context,
+            "post" =>
+              Map.put(post, "tags", [
+                %{"namespace" => "topic", "key" => "test", "name" => " \n\t "}
+              ])
+          }
+        ] do
+      assert_raise ExUnit.AssertionError, fn ->
+        assert_request_schema(attrs, "CreateMemoryPostRequest", ApiSpec.spec())
+      end
+
+      assert request(credential, "/tama/memory/posts", attrs).status == 422
+    end
   end
 end

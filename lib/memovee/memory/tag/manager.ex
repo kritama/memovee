@@ -84,7 +84,7 @@ defmodule Memovee.Memory.Tag.Manager do
         end
 
       if Enum.any?([:name, :description, :namespace, :key], &Map.has_key?(changeset.changes, &1)),
-        do: Revision.bump_posts(posts)
+        do: Revision.bump_posts(scope, posts)
 
       updated
     end)

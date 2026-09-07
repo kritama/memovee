@@ -17,7 +17,7 @@ defmodule Memovee.Memory.Tagging.Manager do
           {:error, error} -> Repo.rollback(error)
         end
 
-      Revision.bump_posts([post])
+      Revision.bump_posts(scope, [post])
       tagging
     end)
   end
@@ -32,7 +32,7 @@ defmodule Memovee.Memory.Tagging.Manager do
             where: tagging.post_id == ^post.id and tagging.tag_id == ^tag.id
         )
 
-      if count > 0, do: Revision.bump_posts([post])
+      if count > 0, do: Revision.bump_posts(scope, [post])
       {count, nil}
     end)
     |> case do

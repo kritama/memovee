@@ -14,7 +14,7 @@ defmodule MemoveeWeb.Schemas.Tama.Memory.Context do
         type: :string,
         minLength: 1,
         maxLength: 512,
-        pattern: ~r/^[^\x00]*$/
+        pattern: ~r/^(?=[^\x00]*\S)[^\x00]*$/
       }
     }
   })

@@ -40,7 +40,7 @@ defmodule Memovee.Memory.Post.Manager do
 
       case existing_post(scope.owner.id, origin) do
         nil -> persist(scope, origin, attrs)
-        post -> saved(post, true)
+        post -> saved(scope, post, true)
       end
     end)
   end
@@ -81,8 +81,8 @@ defmodule Memovee.Memory.Post.Manager do
     post = changeset |> Repo.insert() |> unwrap()
 
     Enum.each(tags, &attach_tag(post, &1))
-    unwrap(Projections.create_indexing(post))
-    saved(post, false)
+    unwrap(Projections.create_indexing(scope, post))
+    saved(scope, post, false)
   end
 
   defp attach_tag(post, attrs) do
@@ -103,8 +103,8 @@ defmodule Memovee.Memory.Post.Manager do
     unwrap(%Tagging{} |> Tagging.changeset(post, tag) |> Repo.insert())
   end
 
-  defp saved(post, replayed) do
-    projection = Projections.get_post_indexing!(post)
+  defp saved(scope, post, replayed) do
+    projection = unwrap(Projections.get_post_indexing(scope, post))
 
     tag_ids =
       Repo.all(
@@ -158,7 +158,7 @@ defmodule Memovee.Memory.Post.Manager do
       invalidate_sync(scope.actor, current, updated)
 
       if Enum.any?([:title, :body, :metadata], &Map.has_key?(changeset.changes, &1)),
-        do: unwrap(Projections.bump_indexing_revision(updated)),
+        do: unwrap(Projections.bump_indexing_revision(scope, updated)),
         else: updated
     end)
   end

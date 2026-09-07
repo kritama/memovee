@@ -74,11 +74,50 @@ defmodule Memovee.Projections.IndexingTest do
   test "revision bumps reload stale structs" do
     {:ok, scope} = Scope.resolve(user_fixture().actor, %{})
     {:ok, result} = Post.Manager.create(scope, %{"body" => "source"})
-    assert {:ok, first} = Indexing.Manager.bump(result.post)
+    assert {:ok, first} = Indexing.Manager.bump(scope, result.post)
     assert first.memory_revision == 2
-    assert {:ok, second} = Indexing.Manager.bump(result.post)
+    assert {:ok, second} = Indexing.Manager.bump(scope, result.post)
     assert second.memory_revision == 3
     assert Repo.aggregate(Indexing, :count) == 3
     assert Repo.aggregate(Oban.Job, :count) == 3
+  end
+
+  test "all public indexing operations reject foreign and inactive scopes" do
+    owner = user_fixture().actor
+    agent = agent_fixture(owner)
+    {:ok, scope} = Scope.resolve(agent, %{})
+    {:ok, result} = Post.Manager.create(scope, %{"body" => "Private"})
+    {:ok, other} = Scope.resolve(user_fixture().actor, %{})
+    forged = %Post{id: result.post.id, owner_actor_id: other.owner.id}
+
+    for operation <- [
+          &Memovee.Projections.create_indexing/2,
+          &Memovee.Projections.get_post_indexing/2,
+          &Memovee.Projections.bump_indexing_revision/2
+        ] do
+      assert {:error, :not_found} = operation.(other, forged)
+    end
+
+    assert {:ok, _} = Eventful.Transit.perform(agent, owner, "deactivate")
+
+    for operation <- [
+          &Memovee.Projections.create_indexing/2,
+          &Memovee.Projections.get_post_indexing/2,
+          &Memovee.Projections.bump_indexing_revision/2
+        ] do
+      assert {:error, :forbidden} = operation.(scope, result.post)
+    end
+
+    assert Repo.reload!(result.post).memory_revision == 1
+    assert Repo.aggregate(Indexing, :count) == 1
+    assert Repo.aggregate(Oban.Job, :count) == 1
+  end
+
+  test "indexing reads reload current revisions rather than trusting supplied structs" do
+    {:ok, scope} = Scope.resolve(user_fixture().actor, %{})
+    {:ok, result} = Post.Manager.create(scope, %{"body" => "source"})
+    assert {:ok, _} = Memovee.Projections.bump_indexing_revision(scope, result.post)
+    assert {:ok, projection} = Memovee.Projections.get_post_indexing(scope, result.post)
+    assert projection.revision == 2
   end
 end

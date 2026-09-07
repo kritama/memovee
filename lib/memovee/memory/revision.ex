@@ -9,9 +9,9 @@ defmodule Memovee.Memory.Revision do
     Repo.all(from post in Post, where: post.id in ^ids, order_by: post.id, lock: "FOR UPDATE")
   end
 
-  def bump_posts(posts) do
+  def bump_posts(scope, posts) do
     Enum.each(posts, fn post ->
-      case Projections.bump_indexing_revision(post) do
+      case Projections.bump_indexing_revision(scope, post) do
         {:ok, _} -> :ok
         {:error, error} -> Repo.rollback(error)
       end
