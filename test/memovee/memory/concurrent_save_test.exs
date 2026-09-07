@@ -3,7 +3,7 @@ defmodule Memovee.Memory.ConcurrentSaveTest do
   import Ecto.Query
   alias Ecto.Adapters.SQL.Sandbox
   alias Memovee.Accounts.Actor
-  alias Memovee.Memory.{Ingestion, Post, Scope, Tag, Tagging}
+  alias Memovee.Memory.{Post, Scope, Tag, Tagging}
   alias Memovee.Projections.Search
   alias Memovee.Repo
 
@@ -37,15 +37,13 @@ defmodule Memovee.Memory.ConcurrentSaveTest do
     results =
       1..20
       |> Task.async_stream(
-        fn _ ->
+        fn attempt ->
           Sandbox.unboxed_run(Repo, fn ->
             {:ok, scope} = Scope.resolve(service, context)
-            {:ok, %{data: opened}} = Ingestion.Manager.open(scope, "The same original source.")
 
-            Ingestion.Manager.save(scope, %{
-              "ingestion_id" => opened.ingestion_id,
+            Post.Manager.create(scope, %{
               "title" => nil,
-              "body" => "Canonical source",
+              "body" => "Canonical wording #{attempt}",
               "tags" => [],
               "metadata" => %{
                 "kind" => "fact",
@@ -67,6 +65,7 @@ defmodule Memovee.Memory.ConcurrentSaveTest do
     assert length(results) == 20
     receipts = Enum.map(results, fn {:ok, {:ok, result}} -> result.receipt end)
     assert length(Enum.uniq_by(receipts, & &1.post_id)) == 1
+    assert length(Enum.uniq_by(receipts, & &1.body_hash)) == 1
     assert Enum.count(receipts, &(not &1.replayed)) == 1
 
     Sandbox.unboxed_run(Repo, fn ->
@@ -88,11 +87,6 @@ defmodule Memovee.Memory.ConcurrentSaveTest do
                from(job in Search, where: job.owner_actor_id == ^owner.id),
                :count
              ) == 1
-
-      assert Repo.aggregate(
-               from(ingestion in Ingestion, where: ingestion.owner_actor_id == ^owner.id),
-               :count
-             ) == 1
     end)
   end
 
@@ -107,7 +101,6 @@ defmodule Memovee.Memory.ConcurrentSaveTest do
     )
 
     Repo.delete_all(from tagging in Tagging, where: tagging.post_id in subquery(posts))
-    Repo.delete_all(from ingestion in Ingestion, where: ingestion.owner_actor_id == ^owner.id)
     Repo.delete_all(from job in Search, where: job.owner_actor_id == ^owner.id)
     Repo.delete_all(from post in Post, where: post.owner_actor_id == ^owner.id)
     Repo.delete_all(from tag in Tag, where: tag.owner_actor_id == ^owner.id)

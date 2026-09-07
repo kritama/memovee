@@ -8,10 +8,9 @@ defmodule MemoveeWeb.Tama.Memory.Schemas.GraphPostRequest do
     title: "GraphMemoryPostRequest",
     type: :object,
     additionalProperties: false,
-    required: [:context, :ingestion_id, :title, :body, :metadata, :tags],
+    required: [:context, :title, :body, :metadata, :tags],
     properties: %{
       context: Context,
-      ingestion_id: %Schema{type: :string, format: :uuid},
       title: %Schema{type: :string, nullable: true, minLength: 1, maxLength: 255},
       body: %Schema{
         type: :string,

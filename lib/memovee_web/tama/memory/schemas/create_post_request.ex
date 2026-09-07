@@ -1,5 +1,5 @@
 defmodule MemoveeWeb.Tama.Memory.Schemas.CreatePostRequest do
-  @moduledoc "Ordinary-agent and trusted Tama service save envelopes. Saved ingestions replay before candidate validation."
+  @moduledoc "Ordinary-agent and trusted Tama service save envelopes. Saved source identifiers replay before candidate validation."
   require OpenApiSpex
   alias MemoveeWeb.Tama.Memory.Schemas.{DirectPostRequest, GraphPostRequest}
 

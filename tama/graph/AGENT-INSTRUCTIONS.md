@@ -28,7 +28,7 @@ Poll after 1, 2, 4, then every 5 seconds, stopping after 60 seconds of elapsed w
 ## Completed result
 
 ```json
-{"schema_version":"1","id":"01990000-0000-7000-8000-000000000010","identifier":"checkpoint-42","status":"completed","retry_after_ms":null,"result":{"operation":"remember","outcome":"saved","post_id":"01990000-0000-7000-8000-000000000101","ingestion_id":"01990000-0000-7000-8000-000000000201","indexing_status":"pending","replayed":false},"text":"Saved memory 01990000-0000-7000-8000-000000000101. Indexing is pending.","error":null}
+{"schema_version":"1","id":"01990000-0000-7000-8000-000000000010","identifier":"checkpoint-42","status":"completed","retry_after_ms":null,"result":{"operation":"remember","outcome":"saved","post_id":"01990000-0000-7000-8000-000000000101","indexing_status":"pending","replayed":false},"text":"Saved memory 01990000-0000-7000-8000-000000000101. Indexing is pending.","error":null}
 ```
 
 These examples specify the contract; scaffolding does not imply the runtime or consumer graphs are deployed.

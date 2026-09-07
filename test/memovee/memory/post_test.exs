@@ -24,4 +24,10 @@ defmodule Memovee.Memory.PostTest do
     refute changeset.valid?
     assert {"can't be blank", _options} = changeset.errors[:body]
   end
+
+  test "source identifiers are assigned by trusted code, never cast from input" do
+    post = %Post{origin_identifier: "trusted:source"}
+    changeset = Post.changeset(post, %{"body" => "source", "origin_identifier" => "forged"})
+    assert Ecto.Changeset.get_field(changeset, :origin_identifier) == "trusted:source"
+  end
 end

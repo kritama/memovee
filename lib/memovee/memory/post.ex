@@ -11,6 +11,7 @@ defmodule Memovee.Memory.Post do
     belongs_to :owner_actor, Memovee.Accounts.Actor
     belongs_to :created_by_actor, Memovee.Accounts.Actor
     field :memory_revision, :integer, default: 1
+    field :origin_identifier, :string
     field :title, :string
     field :body, :string
     field :body_hash, :string
@@ -41,6 +42,7 @@ defmodule Memovee.Memory.Post do
       if String.trim(body) == "", do: [body: "can't be blank"], else: []
     end)
     |> put_body_hash()
+    |> unique_constraint([:owner_actor_id, :origin_identifier])
     |> check_constraint(:body, name: :memory_posts_body_non_blank)
     |> check_constraint(:body_hash, name: :memory_posts_body_hash_format)
   end

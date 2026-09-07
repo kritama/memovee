@@ -35,7 +35,6 @@ folder with the same basename as that file:
 - `memory-query/`: query and answer candidate provider schemas.
 - `memory-index/`: description provider schema.
 - `memory-projection/`: projection request schema.
-- `remember-ingestion/`: ingestion template reserved for the future ingestion chain.
 
 `schemas/memory-contract.v1.json` is the shared memory data contract published in
 issue #9. `schemas.tf` loads it for the result classes in both `remember.tf` and
@@ -57,11 +56,11 @@ The graph follows the feature-oriented file layout in `memovee-tama`:
   spaces, outgoing bridges and shared generation inputs and output classes.
 - `memory-api.tf` and `memory-inference.tf` declare the shared service components;
   `models.tf` and `queues.tf` hold model and worker configuration.
-- Files such as `remember-ingestion.tf`, `remember-save.tf`, `recall-search.tf`
+- Files such as `remember-candidate.tf`, `remember-save.tf`, `recall-search.tf`
   and `index-snapshot.tf` keep each handler's request class, chain and node together.
 - `outputs.tf` exposes the public interfaces; it does not construct the graph.
 
-#11 adds result delivery and #12/#13/#15 fill the ingestion/index/recall chains.
+#11 adds result delivery and #12/#13/#15 fill the remember/index/recall chains.
 Reactive nodes have `count = 0` in their owning files until those chains have real terminal paths.
 `memory_interfaces.ready` is therefore false. The API source space and explicit
 operation-ID lookup interfaces wait for the real backend specification; #13 owns
@@ -116,26 +115,28 @@ integration verification. #16 owns the full memory evaluation suite.
 
 ## Memory HTTP persistence
 
-Memovee implements the persistence operations `memory_ingestion_open`,
-`memory_ingestion_status`, and `memory_post_create` in `/tama/openapi`.
+Memovee publishes `memory_post_create` at `POST /tama/memory/posts` in
+`/tama/openapi`. Tama retains the original message, extracts the structured Post,
+and submits it directly with the runtime-owned `context`.
+
 Set `MEMOVEE_MEMORY_TAMA_ACTOR_ID` to the dedicated service Actor's UUID and supply
-that Actor's existing API credential to the future graph API source. Ordinary
-agent credentials resolve ownership through their active human owner; only the
-configured service may submit runtime-owned `context`.
+that Actor's existing API credential to the graph API source. Ordinary agent
+credentials resolve ownership through their active human owner; only the configured
+service may assert `context.actor_id` and `context.origin_identifier`.
 
-Open stores the exact submitted content before extraction. Its response contains
-an ingestion ID, source hash, state and receipt; the graph retains the original
-root entity as extraction input. Status does not create submissions or return raw
-source. Save commits the Post, normalized tags, taggings, pending projection job
-and ingestion linkage together. Replays preserve the original receipt's body hash
-and tag IDs while reading indexing status from durable state.
+The Post stores the trusted origin identifier. A transaction lock and unique index
+on owner/origin ensure concurrent retries create one Post, its tags, search projection
+and Oban job. A saved origin returns the existing Post before candidate validation,
+so changed extraction wording cannot create another memory. Receipts are built from
+the current Post, tags and indexing state; there is no duplicated source or receipt
+snapshot. An uncertain save can retry the same POST once with the same trusted context.
+If that retry is also inconclusive, report `save_unconfirmed` rather than assuming
+nothing was saved.
 
-Ownership is required from the first migration. This system is not deployed and
-has no legacy backfill or ownership-assignment task. Ordinary agent submissions
-with title/body/metadata remain supported and receive a fresh internal submission
-ID plus a receipt. Graph submissions require typed metadata and an opened
-submission. The graph save caller remains work for #12; #13 owns the indexing
-worker and Redis integration, and #14 owns search.
+Ownership is required from the first migration. Ordinary agent submissions remain
+supported without context and create a fresh Post on each request. There is no
+ingestion model, pre-extraction registration or status endpoint. #12 owns the graph
+save caller, #13 owns indexing execution, and #14 owns search.
 
 Projection scheduling uses [Oban](https://oban.hexdocs.pm/Oban.html). Every new
 projection revision inserts an Oban job in the same database transaction. Oban

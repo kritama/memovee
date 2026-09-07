@@ -1,7 +1,7 @@
-defmodule Memovee.Memory.IngestionTest do
+defmodule Memovee.Memory.PostPersistenceTest do
   use Memovee.DataCase, async: false
   import Memovee.AccountsFixtures
-  alias Memovee.Memory.{Candidate, Ingestion, Post, Scope, Tag, Tagging}
+  alias Memovee.Memory.{Post, Scope, Tag, Tagging}
   alias Memovee.Projections.Search
 
   setup do
@@ -20,47 +20,32 @@ defmodule Memovee.Memory.IngestionTest do
     %{owner: owner, agent: agent, service: service, scope: scope}
   end
 
-  test "immutable source open, conflict, atomic save and changed-candidate replay", %{
-    scope: scope
-  } do
-    content = " Original source.\n"
-    assert {:ok, %{data: opened, replayed: false}} = Ingestion.Manager.open(scope, content)
-    assert opened.source_hash == Candidate.hash(content)
-    assert opened.receipt == nil
-    assert {:ok, %{data: ^opened, replayed: true}} = Ingestion.Manager.open(scope, content)
-    assert {:error, :ingestion_conflict} = Ingestion.Manager.open(scope, "changed")
-    assert {:ok, result} = Ingestion.Manager.save(scope, candidate(opened.ingestion_id))
+  test "atomic save and changed-candidate replay", %{scope: scope} do
+    assert {:ok, result} = Post.Manager.create(scope, candidate())
     assert result.receipt.indexing_status == "pending"
     assert result.post.owner_actor_id == scope.owner.id
     assert result.post.created_by_actor_id == scope.actor.id
+    assert result.post.origin_identifier == scope.origin_identifier
     assert Repo.aggregate(Post, :count) == 1
     assert Repo.aggregate(Tag, :count) == 2
     assert Repo.aggregate(Tagging, :count) == 2
     assert Repo.aggregate(Search, :count) == 1
-
-    assert {:ok, replay} =
-             Ingestion.Manager.save(scope, %{"ingestion_id" => opened.ingestion_id, "body" => nil})
-
+    assert {:ok, replay} = Post.Manager.create(scope, %{"body" => nil})
     assert replay.post == result.post
     assert replay.receipt == %{result.receipt | replayed: true}
-    assert {:ok, %{state: "saved", receipt: receipt}} = Ingestion.Manager.status(scope)
-    assert receipt == replay.receipt
-    assert Repo.get!(Ingestion, opened.ingestion_id).original_content == content
   end
 
-  test "invalid tags leave an open ingestion and roll back all saved records", %{scope: scope} do
-    {:ok, %{data: opened}} = Ingestion.Manager.open(scope, "source")
-
+  test "invalid tags roll back all saved records and allow a corrected retry", %{scope: scope} do
     attrs =
-      candidate(opened.ingestion_id)
+      candidate()
       |> Map.put("tags", [%{"namespace" => "project", "key" => "!", "name" => "Invalid"}])
 
-    assert {:error, :invalid_tags} = Ingestion.Manager.save(scope, attrs)
+    assert {:error, :invalid_tags} = Post.Manager.create(scope, attrs)
 
-    for schema <- [Post, Tag, Tagging, Search],
+    for schema <- [Post, Tag, Tagging, Search, Oban.Job],
         do: assert(Repo.aggregate(schema, :count) == 0)
 
-    assert Repo.get!(Ingestion, opened.ingestion_id).post_id == nil
+    assert {:ok, %{replayed: false}} = Post.Manager.create(scope, candidate())
   end
 
   test "two agents share an owner but another owner cannot hydrate a post", %{
@@ -75,7 +60,7 @@ defmodule Memovee.Memory.IngestionTest do
     {:ok, third} = Scope.resolve(other, %{})
 
     {:ok, result} =
-      Ingestion.Manager.save(first, %{
+      Post.Manager.create(first, %{
         "body" => "private",
         "tags" => [%{"namespace" => "project", "name" => "Shared"}]
       })
@@ -85,7 +70,7 @@ defmodule Memovee.Memory.IngestionTest do
     assert {:ok, []} = Post.Manager.list(third)
 
     {:ok, other_result} =
-      Ingestion.Manager.save(third, %{
+      Post.Manager.create(third, %{
         "body" => "other",
         "tags" => [%{"namespace" => "project", "name" => "Shared"}]
       })
@@ -102,7 +87,7 @@ defmodule Memovee.Memory.IngestionTest do
   } do
     assert {:error, :forbidden_context} = Scope.resolve(agent, %{"context" => %{}})
     {:ok, _} = Memovee.Accounts.Actor.Manager.transition(owner, owner, :deactivate)
-    assert {:error, :forbidden} = Ingestion.Manager.status(scope)
+    assert {:error, :forbidden} = Post.Manager.create(scope, candidate())
     assert {:error, :forbidden} = Scope.resolve(agent, %{})
   end
 
@@ -124,10 +109,10 @@ defmodule Memovee.Memory.IngestionTest do
       ]
     }
 
-    {:ok, first} = Ingestion.Manager.save(direct, attrs)
+    {:ok, first} = Post.Manager.create(direct, attrs)
 
     {:ok, _} =
-      Ingestion.Manager.save(
+      Post.Manager.create(
         direct,
         put_in(attrs, ["tags", Access.at(0), "description"], "Replacement")
       )
@@ -152,15 +137,16 @@ defmodule Memovee.Memory.IngestionTest do
     assert Search.Manager.fingerprint(fixture["input"]) == fixture["sha256"]
   end
 
-  test "saved receipts retain original hashes and tags after canonical edits", %{
+  test "replay receipts reflect current canonical data without overwriting edits", %{
     scope: scope,
     agent: agent
   } do
-    {:ok, %{data: opened}} = Ingestion.Manager.open(scope, "source")
-    {:ok, result} = Ingestion.Manager.save(scope, candidate(opened.ingestion_id))
-    {:ok, _updated} = Post.Manager.update(agent, result.post, %{body: "Changed canonical body"})
-    {:ok, status} = Ingestion.Manager.status(scope)
-    assert status.receipt == %{result.receipt | replayed: true}
+    {:ok, result} = Post.Manager.create(scope, candidate())
+    {:ok, updated} = Post.Manager.update(agent, result.post, %{body: "Changed canonical body"})
+    {:ok, replay} = Post.Manager.create(scope, candidate())
+    assert replay.post == updated
+    assert replay.receipt.body_hash == updated.body_hash
+    assert replay.receipt.replayed
   end
 
   test "inactive agents, inactive service and unowned agents cannot resolve", %{
@@ -170,29 +156,24 @@ defmodule Memovee.Memory.IngestionTest do
     service: service
   } do
     {:ok, _} = Eventful.Transit.perform(agent, owner, "deactivate")
-    assert {:error, :forbidden} = Ingestion.Manager.status(scope)
+    assert {:error, :forbidden} = Post.Manager.create(scope, candidate())
 
     {:ok, _} =
       Eventful.Transit.perform(Repo.get!(Memovee.Accounts.Actor, agent.id), owner, "activate")
 
     {:ok, _} = Eventful.Transit.perform(service, owner, "deactivate")
-    assert {:error, :forbidden} = Ingestion.Manager.status(scope)
+    assert {:error, :forbidden} = Post.Manager.create(scope, candidate())
     {:ok, unowned} = Memovee.Accounts.Actor.Manager.get_or_create_agent("unowned-test")
     assert {:error, :forbidden} = Scope.resolve(unowned, %{})
   end
 
-  test "origin mismatch, cross-owner ingestion and derived references are rejected", %{
+  test "idempotency is owner and origin scoped and provenance stays authorized", %{
     scope: scope,
     service: service
   } do
-    {:ok, %{data: opened}} = Ingestion.Manager.open(scope, "source")
-
-    assert {:error, :not_found} =
-             Ingestion.Manager.save(
-               %{scope | origin_identifier: "wrong"},
-               candidate(opened.ingestion_id)
-             )
-
+    {:ok, first} = Post.Manager.create(scope, candidate())
+    {:ok, second} = Post.Manager.create(%{scope | origin_identifier: "another"}, candidate())
+    refute first.post.id == second.post.id
     other_owner = user_fixture().actor
 
     {:ok, other_scope} =
@@ -203,25 +184,23 @@ defmodule Memovee.Memory.IngestionTest do
         }
       })
 
-    assert {:error, :not_found} =
-             Ingestion.Manager.save(other_scope, candidate(opened.ingestion_id))
+    {:ok, other} = Post.Manager.create(other_scope, candidate())
+    refute first.post.id == other.post.id
+    attrs = put_in(candidate(), ["metadata", "derived_from_post_ids"], [first.post.id])
 
-    attrs =
-      put_in(candidate(opened.ingestion_id), ["metadata", "derived_from_post_ids"], [
-        Ecto.UUID.generate(version: 7)
-      ])
+    assert {:error, :invalid_candidate} =
+             Post.Manager.create(%{other_scope | origin_identifier: "new"}, attrs)
 
-    assert {:error, :invalid_candidate} = Ingestion.Manager.save(scope, attrs)
-    assert Repo.aggregate(Post, :count) == 0
+    assert Repo.aggregate(Post, :count) == 3
   end
 
   test "tagging changes enqueue revisions and unchanged updates do not", %{agent: agent} do
     {:ok, scope} = Scope.resolve(agent, %{})
     attrs = %{"body" => "source", "tags" => [%{"namespace" => "project", "name" => "One"}]}
-    {:ok, first} = Ingestion.Manager.save(scope, attrs)
+    {:ok, first} = Post.Manager.create(scope, attrs)
 
     {:ok, second} =
-      Ingestion.Manager.save(scope, put_in(attrs, ["tags", Access.at(0), "name"], "Two"))
+      Post.Manager.create(scope, put_in(attrs, ["tags", Access.at(0), "name"], "Two"))
 
     [tag_id] = second.receipt.tag_ids
     tag = Repo.get!(Tag, tag_id)
@@ -234,9 +213,8 @@ defmodule Memovee.Memory.IngestionTest do
     assert Repo.aggregate(Search, :count) == 4
   end
 
-  defp candidate(id) do
+  defp candidate do
     %{
-      "ingestion_id" => id,
       "title" => "Preference",
       "body" => "Use Req.",
       "metadata" => %{

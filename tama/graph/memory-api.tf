@@ -20,7 +20,7 @@ variable "memory_api_operations" {
   default = []
   validation {
     condition = length(setsubtract(var.memory_api_operations, toset([
-      "memory_ingestion_open", "memory_ingestion_status", "memory_post_create",
+      "memory_post_create",
       "memory_search", "memory_projection_snapshot", "memory_projection_complete"
     ]))) == 0
     error_message = "Only explicit Memory v1 operation IDs may be resolved."

@@ -1,6 +1,6 @@
 defmodule Memovee.Memory.Candidate do
   @moduledoc "Validates persisted memory values without trusting generated identity or lifecycle fields."
-  @reserved ~w(owner_actor_id actor_id created_by_actor_id current_state current_state_version ingestion_id origin_identifier)
+  @reserved ~w(owner_actor_id actor_id created_by_actor_id current_state current_state_version origin_identifier)
   @kinds ~w(fact preference decision brief progress review procedure)
   @metadata_keys ~w(kind epistemic_status approval source occurred_at effective_at derived_from_post_ids)
   @tag_keys ~w(namespace key name description metadata)

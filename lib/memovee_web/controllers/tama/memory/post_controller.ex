@@ -2,7 +2,7 @@ defmodule MemoveeWeb.Tama.Memory.PostController do
   use MemoveeWeb, :controller
   use OpenApiSpex.ControllerSpecs
 
-  alias Memovee.Memory.{Ingestion, Scope}
+  alias Memovee.Memory.{Post, Scope}
   alias MemoveeWeb.Tama.Memory.Error
 
   alias MemoveeWeb.Tama.Memory.Schemas.{
@@ -28,15 +28,14 @@ defmodule MemoveeWeb.Tama.Memory.PostController do
       unauthorized:
         {"Invalid or missing API credential", "application/json", UnauthorizedResponse},
       forbidden: {"Forbidden memory scope", "application/json", MemoryErrorResponse},
-      not_found: {"Inaccessible ingestion", "application/json", MemoryErrorResponse},
       unprocessable_entity: {"Invalid memory request", "application/json", MemoryErrorResponse}
     ]
 
   def create(conn, attrs) do
     with {:ok, scope} <- Scope.resolve(conn.assigns.current_scope.actor, attrs),
          true <-
-           Enum.all?(Map.keys(attrs), &(&1 in ~w(context ingestion_id title body metadata tags))),
-         {:ok, result} <- Ingestion.Manager.save(scope, attrs) do
+           Enum.all?(Map.keys(attrs), &(&1 in ~w(context title body metadata tags))),
+         {:ok, result} <- Post.Manager.create(scope, attrs) do
       conn
       |> put_status(if(result.replayed, do: 200, else: 201))
       |> render(:show, post: result.post, receipt: result.receipt)

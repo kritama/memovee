@@ -14,7 +14,7 @@ defmodule Memovee.Memory.CandidateTest do
 
   test "reserved metadata keys are rejected at any nesting depth" do
     for key <-
-          ~w(owner_actor_id actor_id created_by_actor_id current_state current_state_version ingestion_id origin_identifier) do
+          ~w(owner_actor_id actor_id created_by_actor_id current_state current_state_version origin_identifier) do
       attrs = %{"body" => "source", "metadata" => %{"nested" => [%{key => "forged"}]}}
       assert {:error, :invalid_candidate} = Candidate.validate(attrs, false)
     end

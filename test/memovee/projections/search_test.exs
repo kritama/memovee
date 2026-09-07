@@ -1,7 +1,7 @@
 defmodule Memovee.Projections.SearchTest do
   use Memovee.DataCase, async: false
   import Memovee.AccountsFixtures
-  alias Memovee.Memory.{Ingestion, Scope}
+  alias Memovee.Memory.{Post, Scope}
   alias Memovee.Projections.Search
 
   test "job declarations require the configured active service and cannot claim readiness yet" do
@@ -12,7 +12,7 @@ defmodule Memovee.Projections.SearchTest do
     Application.put_env(:memovee, :memory_tama_actor_id, service.id)
     on_exit(fn -> Application.put_env(:memovee, :memory_tama_actor_id, previous) end)
     {:ok, scope} = Scope.resolve(agent, %{})
-    {:ok, result} = Ingestion.Manager.save(scope, %{"body" => "source"})
+    {:ok, result} = Post.Manager.create(scope, %{"body" => "source"})
     job = Repo.get_by!(Search, post_id: result.post.id)
 
     assert Enum.sort(Search.Transitions.valid_states()) ==
@@ -38,14 +38,14 @@ defmodule Memovee.Projections.SearchTest do
 
     assert {:error, :forced_rollback} =
              Repo.transaction(fn ->
-               {:ok, _} = Ingestion.Manager.save(scope, %{"body" => "rolled back"})
+               {:ok, _} = Post.Manager.create(scope, %{"body" => "rolled back"})
                Repo.rollback(:forced_rollback)
              end)
 
     assert Repo.aggregate(Search, :count) == 0
     assert Repo.aggregate(Oban.Job, :count) == 0
 
-    {:ok, result} = Ingestion.Manager.save(scope, %{"body" => "saved"})
+    {:ok, result} = Post.Manager.create(scope, %{"body" => "saved"})
     job = Repo.one!(Oban.Job)
     projection = Repo.get_by!(Search, post_id: result.post.id)
     assert job.args == %{"projection_id" => projection.id}

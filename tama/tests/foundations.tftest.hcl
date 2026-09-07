@@ -11,7 +11,7 @@ run "staged_foundations" {
     error_message = "Scaffolding must not advertise a ready graph."
   }
   assert {
-    condition     = length(module.memory.interfaces.stages) == 34
+    condition     = length(module.memory.interfaces.stages) == 31
     error_message = "Every fixed stage needs an independent handler interface."
   }
   assert {

@@ -1,4 +1,4 @@
-defmodule Memovee.Repo.Migrations.AddMemoryOwnershipAndIngestions do
+defmodule Memovee.Repo.Migrations.AddMemoryOwnershipAndProjections do
   use Ecto.Migration
 
   def change do
@@ -9,6 +9,7 @@ defmodule Memovee.Repo.Migrations.AddMemoryOwnershipAndIngestions do
       add :created_by_actor_id, references(:actors, type: :binary_id, on_delete: :restrict),
         null: false
 
+      add :origin_identifier, :text
       add :memory_revision, :integer, null: false, default: 1
     end
 
@@ -20,27 +21,8 @@ defmodule Memovee.Repo.Migrations.AddMemoryOwnershipAndIngestions do
     drop unique_index(:memory_tags, [:namespace, :key])
     create unique_index(:memory_tags, [:owner_actor_id, :namespace, :key])
     create index(:memory_posts, [:owner_actor_id])
+    create unique_index(:memory_posts, [:owner_actor_id, :origin_identifier])
     create constraint(:memory_posts, :memory_revision_positive, check: "memory_revision >= 1")
-
-    create table(:memory_ingestions, primary_key: false) do
-      add :id, :binary_id, primary_key: true
-
-      add :owner_actor_id, references(:actors, type: :binary_id, on_delete: :restrict),
-        null: false
-
-      add :created_by_actor_id, references(:actors, type: :binary_id, on_delete: :restrict),
-        null: false
-
-      add :origin_identifier, :text, null: false
-      add :original_content, :text, null: false
-      add :source_hash, :string, null: false
-      add :saved_receipt, :map
-      add :post_id, references(:memory_posts, type: :binary_id, on_delete: :restrict)
-      timestamps(type: :utc_datetime)
-    end
-
-    create unique_index(:memory_ingestions, [:owner_actor_id, :origin_identifier])
-    create unique_index(:memory_ingestions, [:post_id])
 
     create table(:projections_searches, primary_key: false) do
       add :id, :binary_id, primary_key: true

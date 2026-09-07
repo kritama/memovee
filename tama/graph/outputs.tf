@@ -1,4 +1,4 @@
-# Public interfaces for the follow-up ingestion, indexing and recall work.
+# Public interfaces for the follow-up remember, indexing and recall work.
 # Resources are declared in the feature files; this output only exposes them.
 output "interfaces" {
   value = {
@@ -16,18 +16,6 @@ output "interfaces" {
       recall   = module.recall.schemas
     }
     stages = {
-      "remember-ingestion" = {
-        class_id = module.remember-ingestion-request.class.id
-        chain_id = tama_chain.remember-ingestion.id
-        relation = "ingestion"
-        queue_id = tama_queue.interactive.id
-      }
-      "remember-ingestion-state" = {
-        class_id = module.remember-ingestion-state-request.class.id
-        chain_id = tama_chain.remember-ingestion-state.id
-        relation = "ingestion-state"
-        queue_id = tama_queue.interactive.id
-      }
       "remember-candidate" = {
         class_id = module.remember-candidate-request.class.id
         chain_id = tama_chain.remember-candidate.id
@@ -44,12 +32,6 @@ output "interfaces" {
         class_id = module.remember-status-request.class.id
         chain_id = tama_chain.remember-status.id
         relation = "status"
-        queue_id = tama_queue.interactive.id
-      }
-      "remember-recovery-state" = {
-        class_id = module.remember-recovery-state-request.class.id
-        chain_id = tama_chain.remember-recovery-state.id
-        relation = "recovery-state"
         queue_id = tama_queue.interactive.id
       }
       "remember-retry-save" = {
@@ -205,7 +187,7 @@ output "interfaces" {
       "memory-write" = {
         class_id = module.memory-write-request.class.id
         chain_id = tama_chain.memory-write.id
-        relation = "ingestion"
+        relation = "candidate"
         queue_id = tama_queue.interactive.id
       }
       "memory-query" = {

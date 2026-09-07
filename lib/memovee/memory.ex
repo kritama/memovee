@@ -3,11 +3,11 @@ defmodule Memovee.Memory do
   The Memory context.
   """
 
-  alias __MODULE__.{Ingestion, Post, Projection, Tag, Tagging}
+  alias __MODULE__.{Post, Projection, Tag, Tagging}
 
   defdelegate list_posts(scope), to: Post.Manager, as: :list
   defdelegate get_post(scope, id), to: Post.Manager, as: :get
-  defdelegate create_post(scope, attrs), to: Ingestion.Manager, as: :save
+  defdelegate create_post(scope, attrs), to: Post.Manager, as: :create
   defdelegate update_post(actor, post, attrs), to: Post.Manager, as: :update
   defdelegate change_post(post, attrs \\ %{}), to: Post.Manager, as: :change
 
