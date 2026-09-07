@@ -6,8 +6,8 @@ defmodule Memovee.Projections.Indexing.Manager do
   alias Memovee.Accounts.Actor
   alias Memovee.Memory.{Candidate, Post, Tag, Tagging}
   alias Memovee.Projections.Indexing
+  alias Memovee.Projections.Indexing.Worker
   alias Memovee.Repo
-  alias Memovee.Workers.MemoryProjection
 
   def get_for_post!(%Post{} = post) do
     Repo.get_by!(Indexing,
@@ -52,7 +52,7 @@ defmodule Memovee.Projections.Indexing.Manager do
       Multi.new()
       |> Multi.insert(:projection, changeset)
       |> Oban.insert(:job, fn %{projection: projection} ->
-        MemoryProjection.new(%{projection_id: projection.id})
+        Worker.new(%{projection_id: projection.id})
       end)
       |> Repo.transaction()
       |> case do

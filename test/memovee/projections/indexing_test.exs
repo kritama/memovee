@@ -49,7 +49,7 @@ defmodule Memovee.Projections.IndexingTest do
     job = Repo.one!(Oban.Job)
     projection = Repo.get_by!(Indexing, post_id: result.post.id)
     assert job.args == %{"projection_id" => projection.id}
-    assert job.worker == "Memovee.Workers.MemoryProjection"
+    assert job.worker == "Memovee.Projections.Indexing.Worker"
     assert job.queue == "memory_projection"
     assert job.max_attempts == 5
     assert job.state == "available"

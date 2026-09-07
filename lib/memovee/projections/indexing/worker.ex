@@ -1,4 +1,4 @@
-defmodule Memovee.Workers.MemoryProjection do
+defmodule Memovee.Projections.Indexing.Worker do
   @moduledoc "Oban entry point for memory indexing. The queue remains paused until #13 implements execution."
   use Oban.Worker, queue: :memory_projection, max_attempts: 5
 
