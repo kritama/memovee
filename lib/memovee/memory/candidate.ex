@@ -1,8 +1,8 @@
 defmodule Memovee.Memory.Candidate do
   @moduledoc "Validates persisted memory values without trusting generated identity or lifecycle fields."
+  alias Memovee.Memory.Metadata
+
   @reserved ~w(owner_actor_id actor_id created_by_actor_id current_state current_state_version origin_identifier)
-  @kinds ~w(fact preference decision brief progress review procedure)
-  @metadata_keys ~w(kind epistemic_status approval source occurred_at effective_at derived_from_post_ids)
   @tag_keys ~w(namespace key name description metadata)
 
   def validate(attrs, graph?) when is_map(attrs) do
@@ -11,7 +11,7 @@ defmodule Memovee.Memory.Candidate do
     with true <- is_map(metadata) and not reserved?(metadata),
          true <-
            not graph? or
-             (typed_metadata?(metadata) and
+             (Metadata.changeset(%Metadata{}, metadata).valid? and
                 Enum.all?(~w(title body metadata tags), &Map.has_key?(attrs, &1))),
          true <- valid_post?(attrs),
          {:ok, tags} <- tags(Map.get(attrs, "tags", []), metadata, graph?) do
@@ -37,36 +37,6 @@ defmodule Memovee.Memory.Candidate do
       byte_size(body) <= 32_768 and
       (is_nil(title) or (is_binary(title) and String.length(title) in 1..255))
   end
-
-  defp typed_metadata?(metadata) do
-    Enum.sort(Map.keys(metadata)) == Enum.sort(@metadata_keys) and
-      metadata["kind"] in @kinds and
-      metadata["epistemic_status"] in ~w(user_stated observed proposed inferred reported) and
-      metadata["approval"] in ~w(unspecified proposed reported_approved) and
-      source?(metadata["source"]) and timestamp?(metadata["occurred_at"]) and
-      timestamp?(metadata["effective_at"]) and references?(metadata["derived_from_post_ids"])
-  end
-
-  defp source?(%{"channel" => "agent", "reference" => reference} = source) do
-    map_size(source) == 2 and
-      (is_nil(reference) or
-         (is_binary(reference) and length(String.codepoints(reference)) in 1..512))
-  end
-
-  defp source?(_), do: false
-  defp timestamp?(nil), do: true
-
-  defp timestamp?(value) when is_binary(value),
-    do: match?({:ok, _, _}, DateTime.from_iso8601(value))
-
-  defp timestamp?(_), do: false
-
-  defp references?(ids) when is_list(ids) do
-    length(ids) <= 20 and Enum.uniq(ids) == ids and
-      Enum.all?(ids, &match?({:ok, _}, Ecto.UUID.cast(&1)))
-  end
-
-  defp references?(_), do: false
 
   defp tags(values, metadata, graph?) when is_list(values) do
     with true <- not graph? or Enum.all?(values, &graph_tag?/1),
