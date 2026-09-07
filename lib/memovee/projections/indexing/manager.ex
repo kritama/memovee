@@ -3,6 +3,7 @@ defmodule Memovee.Projections.Indexing.Manager do
   import Ecto.Query
   import Ecto.Changeset
   alias Ecto.Multi
+  alias Jason.OrderedObject
   alias Memovee.Accounts.Actor
   alias Memovee.Memory.{Candidate, Post, Tag, Tagging}
   alias Memovee.Projections.Indexing
@@ -17,7 +18,7 @@ defmodule Memovee.Projections.Indexing.Manager do
     )
   end
 
-  def create_pending(%Post{} = post) do
+  def create(%Post{} = post) do
     tags =
       Repo.all(
         from tag in Tag,
@@ -64,25 +65,12 @@ defmodule Memovee.Projections.Indexing.Manager do
 
   def fingerprint(value), do: value |> canonical_json() |> Candidate.hash()
 
-  def canonical_json(value) when is_map(value) do
-    "{" <>
-      (value
-       |> Enum.map(fn {key, child} -> {to_string(key), child} end)
-       |> Enum.sort_by(&elem(&1, 0))
-       |> Enum.map_join(",", fn {key, child} ->
-         Jason.encode!(key) <> ":" <> canonical_json(child)
-       end)) <> "}"
-  end
-
-  def canonical_json(value) when is_list(value),
-    do: "[" <> Enum.map_join(value, ",", &canonical_json/1) <> "]"
-
-  def canonical_json(value), do: Jason.encode!(value)
+  def canonical_json(value), do: value |> order_keys() |> Jason.encode!()
 
   def bump(%Post{} = post) do
     with {:ok, updated} <-
            post |> change(memory_revision: post.memory_revision + 1) |> Repo.update(),
-         {:ok, _job} <- create_pending(updated) do
+         {:ok, _job} <- create(updated) do
       {:ok, updated}
     end
   end
@@ -114,4 +102,14 @@ defmodule Memovee.Projections.Indexing.Manager do
       {:error, %Eventful.Error{code: :forbidden}}
     end
   end
+
+  defp order_keys(value) when is_map(value) do
+    value
+    |> Enum.map(fn {key, child} -> {to_string(key), order_keys(child)} end)
+    |> Enum.sort_by(&elem(&1, 0))
+    |> OrderedObject.new()
+  end
+
+  defp order_keys(value) when is_list(value), do: Enum.map(value, &order_keys/1)
+  defp order_keys(value), do: value
 end

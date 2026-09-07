@@ -80,7 +80,7 @@ defmodule Memovee.Memory.Post.Manager do
       |> unwrap()
 
     Enum.each(tags, &attach_tag(post, &1))
-    unwrap(Projections.create_pending_indexing(post))
+    unwrap(Projections.create_indexing(post))
     saved(post, false)
   end
 
