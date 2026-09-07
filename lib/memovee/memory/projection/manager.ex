@@ -23,9 +23,10 @@ defmodule Memovee.Memory.Projection.Manager do
     |> join(:inner, [projection], post in Post, on: post.id == projection.post_id)
     |> where(
       [projection, post],
-      projection.current_state == "pending" or
-        (projection.current_state == "synced" and
-           fragment("? IS DISTINCT FROM ?", projection.synced_body_hash, post.body_hash))
+      not is_nil(post.owner_actor_id) and
+        (projection.current_state == "pending" or
+           (projection.current_state == "synced" and
+              fragment("? IS DISTINCT FROM ?", projection.synced_body_hash, post.body_hash)))
     )
     |> order_by([projection], asc: projection.id)
     |> Repo.all()

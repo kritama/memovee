@@ -27,7 +27,7 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
       |> authorize(credential)
       |> post(~p"/tama/memory/posts", attrs)
 
-    assert_operation_response(conn)
+    assert_operation_response(conn, "memory_post_create")
 
     assert %{
              "data" => %{
@@ -75,7 +75,8 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
         |> authorize(credential)
         |> post(~p"/tama/memory/posts", request)
 
-      assert %{"errors" => [_error | _]} = json_response(conn, 422)
+      assert %{"error" => %{"code" => "invalid_request"}} = json_response(conn, 422)
+      assert_operation_response(conn, "memory_post_create")
     end
 
     assert Repo.aggregate(Post, :count) == 0
@@ -95,7 +96,7 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
       |> json_response(200)
 
     assert %{"post" => operation} = spec["paths"]["/tama/memory/posts"]
-    assert operation["operationId"] == "MemoveeWeb.Tama.Memory.PostController.create"
+    assert operation["operationId"] == "memory_post_create"
     assert operation["security"] == nil
     assert Map.has_key?(operation["responses"], "201")
     assert spec["security"] == [%{"bearer_auth" => []}]

@@ -5,38 +5,64 @@ defmodule Memovee.Memory.Post.Manager do
 
   import Ecto.Query, only: [from: 2]
 
-  alias Ecto.Multi
   alias Memovee.Accounts.Actor
-  alias Memovee.Memory.{Post, Projection}
+  alias Memovee.Memory.{Post, Projection, ProjectionJob, Scope}
   alias Memovee.Repo
 
-  def list, do: Repo.all(from post in Post, order_by: [desc: post.id])
+  def list(%Scope{} = scope) do
+    with {:ok, scope} <- Scope.refresh(scope) do
+      {:ok,
+       Repo.all(
+         from post in Post,
+           where: post.owner_actor_id == ^scope.owner.id,
+           order_by: [desc: post.id]
+       )}
+    end
+  end
 
-  def get!(id), do: Repo.get!(Post, id)
-
-  def create(attrs) do
-    %Post{}
-    |> Post.changeset(attrs)
-    |> Repo.insert()
+  def get(%Scope{} = scope, id) do
+    with {:ok, id} <- Ecto.UUID.cast(id), {:ok, scope} <- Scope.refresh(scope) do
+      case Repo.get_by(Post, id: id, owner_actor_id: scope.owner.id) do
+        nil -> {:error, :not_found}
+        post -> {:ok, post}
+      end
+    else
+      :error -> {:error, :invalid_id}
+      error -> error
+    end
   end
 
   def update(%Actor{} = actor, %Post{} = post, attrs) do
-    Multi.new()
-    |> Multi.update(:post, Post.changeset(post, attrs))
-    |> Multi.run(:projections, fn _repo, %{post: updated_post} ->
-      if updated_post.body_hash == post.body_hash do
-        {:ok, []}
-      else
-        Projection.Manager.invalidate_for_post(actor, updated_post)
-      end
+    Repo.transaction(fn ->
+      current = Repo.one!(from row in Post, where: row.id == ^post.id, lock: "FOR UPDATE")
+
+      authorize_update!(actor, current)
+
+      changeset = Post.changeset(current, attrs)
+
+      updated = unwrap(Repo.update(changeset))
+      invalidate_sync(actor, current, updated)
+
+      if Enum.any?([:title, :body, :metadata], &Map.has_key?(changeset.changes, &1)),
+        do: unwrap(ProjectionJob.Manager.bump(updated)),
+        else: updated
     end)
-    |> Repo.transaction()
-    |> case do
-      {:ok, %{post: updated_post}} -> {:ok, updated_post}
-      {:error, :post, changeset, _changes} -> {:error, changeset}
-      {:error, :projections, error, _changes} -> {:error, error}
+  end
+
+  defp authorize_update!(actor, post) do
+    case Scope.resolve(actor, %{}) do
+      {:ok, %{owner: %{id: owner_id}}} when owner_id == post.owner_actor_id -> :ok
+      _ -> Repo.rollback(:not_found)
     end
   end
+
+  defp invalidate_sync(actor, current, updated) do
+    if updated.body_hash != current.body_hash,
+      do: unwrap(Projection.Manager.invalidate_for_post(actor, updated))
+  end
+
+  defp unwrap({:ok, value}), do: value
+  defp unwrap({:error, error}), do: Repo.rollback(error)
 
   def change(%Post{} = post, attrs \\ %{}), do: Post.changeset(post, attrs)
 end

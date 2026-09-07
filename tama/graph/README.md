@@ -113,3 +113,26 @@ to the integration work that enables the graph consumers.
 Static/mock tests are not live acceptance. Service credentials, dependency image,
 loaded queues, real provider messages and root-message/result traces still need
 integration verification. #16 owns the full memory evaluation suite.
+
+## Memory HTTP persistence
+
+Memovee implements the persistence operations `memory_ingestion_open`,
+`memory_ingestion_status`, and `memory_post_create` in `/tama/openapi`.
+Set `MEMOVEE_MEMORY_TAMA_ACTOR_ID` to the dedicated service Actor's UUID and supply
+that Actor's existing API credential to the future graph API source. Ordinary
+agent credentials resolve ownership through their active human owner; only the
+configured service may submit runtime-owned `context`.
+
+Open stores the exact submitted content before extraction. Its response contains
+an ingestion ID, source hash, state and receipt; the graph retains the original
+root entity as extraction input. Status does not create submissions or return raw
+source. Save commits the Post, normalized tags, taggings, pending projection job
+and ingestion linkage together. Replays preserve the original receipt's body hash
+and tag IDs while reading indexing status from durable state.
+
+Ownership is required from the first migration. This system is not deployed and
+has no legacy backfill or ownership-assignment task. Ordinary agent submissions
+with title/body/metadata remain supported and receive a fresh internal submission
+ID plus a receipt. Graph submissions require typed metadata and an opened
+submission. The graph save caller remains work for #12; #13 owns job dispatch,
+leases and Redis indexing, and #14 owns search.

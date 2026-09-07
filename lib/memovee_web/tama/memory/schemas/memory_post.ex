@@ -12,6 +12,7 @@ defmodule MemoveeWeb.Tama.Memory.Schemas.MemoryPost do
     type: :object,
     additionalProperties: false,
     properties: %{
+      receipt: MemoveeWeb.Tama.Memory.Schemas.SaveReceipt,
       id: %Schema{type: :string, format: :uuid},
       title: %Schema{type: :string, nullable: true},
       body: %Schema{type: :string},
@@ -20,7 +21,7 @@ defmodule MemoveeWeb.Tama.Memory.Schemas.MemoryPost do
       inserted_at: %Schema{type: :string, format: :"date-time"},
       updated_at: %Schema{type: :string, format: :"date-time"}
     },
-    required: [:id, :title, :body, :body_hash, :metadata, :inserted_at, :updated_at],
+    required: [:receipt, :id, :title, :body, :body_hash, :metadata, :inserted_at, :updated_at],
     example: %{
       "id" => "0198ed0c-c430-7cf0-a7c9-97304f9c7644",
       "title" => "Launch notes",

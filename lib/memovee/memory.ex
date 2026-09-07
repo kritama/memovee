@@ -3,22 +3,22 @@ defmodule Memovee.Memory do
   The Memory context.
   """
 
-  alias __MODULE__.{Post, Projection, Tag, Tagging}
+  alias __MODULE__.{Ingestion, Post, Projection, Tag, Tagging}
 
-  defdelegate list_posts(), to: Post.Manager, as: :list
-  defdelegate get_post!(id), to: Post.Manager, as: :get!
-  defdelegate create_post(attrs), to: Post.Manager, as: :create
+  defdelegate list_posts(scope), to: Post.Manager, as: :list
+  defdelegate get_post(scope, id), to: Post.Manager, as: :get
+  defdelegate create_post(scope, attrs), to: Ingestion.Manager, as: :save
   defdelegate update_post(actor, post, attrs), to: Post.Manager, as: :update
   defdelegate change_post(post, attrs \\ %{}), to: Post.Manager, as: :change
 
-  defdelegate list_tags(), to: Tag.Manager, as: :list
-  defdelegate get_tag!(id), to: Tag.Manager, as: :get!
+  defdelegate list_tags(scope), to: Tag.Manager, as: :list
+  defdelegate get_tag(scope, id), to: Tag.Manager, as: :get
 
-  defdelegate get_tag_by_namespace_and_key(namespace, key),
+  defdelegate get_tag_by_namespace_and_key(scope, namespace, key),
     to: Tag.Manager,
     as: :get_by_namespace_and_key
 
-  defdelegate create_tag(attrs), to: Tag.Manager, as: :create
+  defdelegate create_tag(scope, attrs), to: Tag.Manager, as: :create
   defdelegate update_tag(tag, attrs), to: Tag.Manager, as: :update
   defdelegate change_tag(tag, attrs \\ %{}), to: Tag.Manager, as: :change
   defdelegate list_post_tags(post), to: Tag.Manager, as: :list_for_post

@@ -10,6 +10,7 @@ defmodule Memovee.Memory.Tag do
   @key_format ~r/\A[a-z0-9][a-z0-9._-]*\z/
 
   schema "memory_tags" do
+    belongs_to :owner_actor, Memovee.Accounts.Actor
     field :namespace, :string
     field :key, :string
     field :name, :string
@@ -30,13 +31,17 @@ defmodule Memovee.Memory.Tag do
     |> update_change(:key, &normalize_key/1)
     |> validate_required([:namespace, :key, :name, :metadata])
     |> validate_length(:namespace, max: 100)
+    |> validate_length(:key, max: 100)
+    |> validate_length(:name, max: 255)
     |> validate_format(:namespace, @key_format)
     |> validate_format(:key, @key_format)
     |> validate_change(:name, fn :name, name ->
       if String.trim(name) == "", do: [name: "can't be blank"], else: []
     end)
     |> check_constraint(:name, name: :memory_tags_name_non_blank)
-    |> unique_constraint([:namespace, :key], name: :memory_tags_namespace_key_index)
+    |> unique_constraint([:owner_actor_id, :namespace, :key],
+      name: :memory_tags_owner_actor_id_namespace_key_index
+    )
   end
 
   defp normalize_key(value), do: value |> String.trim() |> String.downcase()

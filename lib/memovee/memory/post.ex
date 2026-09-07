@@ -5,9 +5,12 @@ defmodule Memovee.Memory.Post do
 
   use Memovee.Schema
 
-  alias Memovee.Memory.{Projection, Tagging}
+  alias Memovee.Memory.{Candidate, Projection, Tagging}
 
   schema "memory_posts" do
+    belongs_to :owner_actor, Memovee.Accounts.Actor
+    belongs_to :created_by_actor, Memovee.Accounts.Actor
+    field :memory_revision, :integer, default: 1
     field :title, :string
     field :body, :string
     field :body_hash, :string
@@ -25,6 +28,15 @@ defmodule Memovee.Memory.Post do
     post
     |> cast(attrs, [:title, :body, :metadata])
     |> validate_required([:body, :metadata])
+    |> validate_length(:title, max: 255)
+    |> validate_change(:body, fn :body, body ->
+      if byte_size(body) > 32_768, do: [body: "exceeds 32768 UTF-8 bytes"], else: []
+    end)
+    |> validate_change(:metadata, fn :metadata, metadata ->
+      if Candidate.reserved?(metadata),
+        do: [metadata: "contains reserved fields"],
+        else: []
+    end)
     |> validate_change(:body, fn :body, body ->
       if String.trim(body) == "", do: [body: "can't be blank"], else: []
     end)

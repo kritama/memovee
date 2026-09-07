@@ -5,8 +5,8 @@ defmodule MemoveeWeb.Tama.Memory.PostJSON do
 
   alias Memovee.Memory.Post
 
-  def show(%{post: %Post{} = post}) do
-    %{data: data(post)}
+  def show(%{post: %Post{} = post, receipt: receipt}) do
+    %{data: Map.put(data(post), :receipt, receipt)}
   end
 
   defp data(%Post{} = post) do

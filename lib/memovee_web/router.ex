@@ -60,6 +60,8 @@ defmodule MemoveeWeb.Router do
 
     scope "/memory", Memory do
       resources "/posts", PostController, only: [:create]
+      post "/ingestions", IngestionController, :create
+      post "/ingestions/status", IngestionController, :status
     end
   end
 

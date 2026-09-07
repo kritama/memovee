@@ -5,30 +5,72 @@ defmodule Memovee.Memory.Tag.Manager do
 
   import Ecto.Query
 
-  alias Memovee.Memory.{Post, Tag, Tagging}
+  alias Memovee.Memory.{Post, Revision, Scope, Tag, Tagging}
   alias Memovee.Repo
 
-  def list, do: Repo.all(from tag in Tag, order_by: [asc: tag.namespace, asc: tag.key])
-
-  def get!(id), do: Repo.get!(Tag, id)
-
-  def get_by_namespace_and_key(namespace, key) do
-    Repo.get_by(Tag,
-      namespace: normalize_key(namespace),
-      key: normalize_key(key)
-    )
+  def list(%Scope{} = scope) do
+    with {:ok, scope} <- Scope.refresh(scope) do
+      {:ok,
+       Repo.all(
+         from tag in Tag,
+           where: tag.owner_actor_id == ^scope.owner.id,
+           order_by: [asc: tag.namespace, asc: tag.key]
+       )}
+    end
   end
 
-  def create(attrs) do
-    %Tag{}
-    |> Tag.changeset(attrs)
-    |> Repo.insert()
+  def get(%Scope{} = scope, id) do
+    with {:ok, id} <- Ecto.UUID.cast(id), {:ok, scope} <- Scope.refresh(scope) do
+      case Repo.get_by(Tag, id: id, owner_actor_id: scope.owner.id) do
+        nil -> {:error, :not_found}
+        tag -> {:ok, tag}
+      end
+    else
+      :error -> {:error, :invalid_id}
+      error -> error
+    end
+  end
+
+  def get_by_namespace_and_key(%Scope{} = scope, namespace, key) do
+    with {:ok, scope} <- Scope.refresh(scope) do
+      {:ok,
+       Repo.get_by(Tag,
+         owner_actor_id: scope.owner.id,
+         namespace: normalize_key(namespace),
+         key: normalize_key(key)
+       )}
+    end
+  end
+
+  def create(%Scope{} = scope, attrs) do
+    with {:ok, scope} <- Scope.refresh(scope) do
+      %Tag{owner_actor_id: scope.owner.id} |> Tag.changeset(attrs) |> Repo.insert()
+    end
   end
 
   def update(%Tag{} = tag, attrs) do
-    tag
-    |> Tag.changeset(attrs)
-    |> Repo.update()
+    Repo.transaction(fn ->
+      current = Repo.one!(from row in Tag, where: row.id == ^tag.id, lock: "FOR UPDATE")
+
+      ids =
+        Repo.all(
+          from tagging in Tagging, where: tagging.tag_id == ^tag.id, select: tagging.post_id
+        )
+
+      posts = Revision.lock_posts(ids)
+      changeset = Tag.changeset(current, attrs)
+
+      updated =
+        case Repo.update(changeset) do
+          {:ok, value} -> value
+          {:error, error} -> Repo.rollback(error)
+        end
+
+      if Enum.any?([:name, :description, :namespace, :key], &Map.has_key?(changeset.changes, &1)),
+        do: Revision.bump_posts(posts)
+
+      updated
+    end)
   end
 
   def change(%Tag{} = tag, attrs \\ %{}), do: Tag.changeset(tag, attrs)
