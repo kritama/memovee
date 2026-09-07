@@ -122,7 +122,7 @@ defmodule Memovee.Memory.PostPersistenceTest do
     assert {:ok, _} = Tag.Manager.update(direct, tag, %{description: "Explicit edit"})
     assert Repo.get!(Post, first.post.id).memory_revision == 2
     assert Repo.aggregate(Indexing, :count) == 4
-    assert {:ok, updated} = Post.Manager.update(agent, first.post, %{title: "New title"})
+    assert {:ok, updated} = Post.Manager.update(direct, first.post, %{title: "New title"})
     assert updated.memory_revision == 3
     assert updated.owner_actor_id == scope.owner.id
   end
@@ -139,10 +139,10 @@ defmodule Memovee.Memory.PostPersistenceTest do
 
   test "replay receipts reflect current canonical data without overwriting edits", %{
     scope: scope,
-    agent: agent
+    agent: _agent
   } do
     {:ok, result} = Post.Manager.create(scope, candidate())
-    {:ok, updated} = Post.Manager.update(agent, result.post, %{body: "Changed canonical body"})
+    {:ok, updated} = Post.Manager.update(scope, result.post, %{body: "Changed canonical body"})
     {:ok, replay} = Post.Manager.create(scope, candidate())
     assert replay.post == updated
     assert replay.receipt.body_hash == updated.body_hash
@@ -208,7 +208,7 @@ defmodule Memovee.Memory.PostPersistenceTest do
     assert Repo.get!(Post, first.post.id).memory_revision == 2
     assert {1, nil} = Tagging.Manager.delete(scope, first.post, tag)
     assert Repo.get!(Post, first.post.id).memory_revision == 3
-    assert {:ok, updated} = Post.Manager.update(agent, first.post, %{body: "source"})
+    assert {:ok, updated} = Post.Manager.update(scope, first.post, %{body: "source"})
     assert updated.memory_revision == 3
     assert Repo.aggregate(Indexing, :count) == 4
   end
@@ -228,5 +228,37 @@ defmodule Memovee.Memory.PostPersistenceTest do
       },
       "tags" => [%{"namespace" => "tool", "key" => "req", "name" => "Req"}]
     }
+  end
+
+  test "post updates reject foreign, missing, and inactive actors", %{
+    scope: scope,
+    agent: agent,
+    owner: owner
+  } do
+    {:ok, result} = Post.Manager.create(scope, candidate())
+    other = user_fixture().actor
+    {:ok, other_scope} = Scope.resolve(other, %{})
+
+    assert {:error, :not_found} =
+             Memovee.Memory.update_post(other_scope, %Post{id: result.post.id}, %{body: "Forged"})
+
+    assert {:error, :not_found} =
+             Memovee.Memory.update_post(scope, %Post{id: Ecto.UUID.generate(version: 7)}, %{
+               body: "Forged"
+             })
+
+    assert {:ok, _} = Eventful.Transit.perform(agent, owner, "deactivate")
+
+    assert {:error, :forbidden} =
+             Memovee.Memory.update_post(scope, result.post, %{body: "Forged"})
+
+    assert Repo.reload!(result.post).body == "Use Req."
+    assert Repo.aggregate(Oban.Job, :count) == 1
+  end
+
+  test "ordinary scopes cannot substitute another effective actor", %{agent: agent} do
+    {:ok, scope} = Scope.resolve(agent, %{})
+    other = user_fixture().actor
+    assert {:error, :forbidden} = Scope.refresh(%{scope | actor: other, owner: other})
   end
 end

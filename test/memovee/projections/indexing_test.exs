@@ -27,10 +27,13 @@ defmodule Memovee.Projections.IndexingTest do
     assert {:error, %Eventful.Error{code: :revision, message: :current_revision}} =
              Eventful.Transit.perform(job, service, "invalidate", [])
 
+    assert {:error, %Eventful.Error{code: :revision, message: :current_revision}} =
+             Eventful.Transit.perform(%{job | revision: 0}, service, "invalidate", [])
+
     assert Repo.reload!(job).current_state == "pending"
     assert Repo.aggregate(Indexing.Event, :count) == 0
 
-    assert {:ok, _} = Post.Manager.update(agent, result.post, %{body: "revised"})
+    assert {:ok, _} = Post.Manager.update(scope, result.post, %{body: "revised"})
 
     assert {:ok, %{resource: obsolete}} = Eventful.Transit.perform(job, service, "invalidate", [])
     assert obsolete.current_state == "obsolete"
@@ -63,8 +66,19 @@ defmodule Memovee.Projections.IndexingTest do
     assert job.queue == "memory_projection"
     assert job.max_attempts == 5
     assert job.state == "available"
-    assert {:ok, _} = Memovee.Memory.Post.Manager.update(agent, result.post, %{body: "revised"})
+    assert {:ok, _} = Memovee.Memory.Post.Manager.update(scope, result.post, %{body: "revised"})
     assert Repo.aggregate(Oban.Job, :count) == 2
     assert Repo.aggregate(Indexing, :count) == 2
+  end
+
+  test "revision bumps reload stale structs" do
+    {:ok, scope} = Scope.resolve(user_fixture().actor, %{})
+    {:ok, result} = Post.Manager.create(scope, %{"body" => "source"})
+    assert {:ok, first} = Indexing.Manager.bump(result.post)
+    assert first.memory_revision == 2
+    assert {:ok, second} = Indexing.Manager.bump(result.post)
+    assert second.memory_revision == 3
+    assert Repo.aggregate(Indexing, :count) == 3
+    assert Repo.aggregate(Oban.Job, :count) == 3
   end
 end

@@ -8,6 +8,9 @@ defmodule Memovee.Memory.Tagging.Manager do
     Repo.transaction(fn ->
       {post, tag} = lock_records(scope, post, tag)
 
+      if Repo.aggregate(from(row in Tagging, where: row.post_id == ^post.id), :count) >= 12,
+        do: Repo.rollback(:tag_limit)
+
       tagging =
         case %Tagging{} |> Tagging.changeset(post, tag) |> Repo.insert() do
           {:ok, value} -> value

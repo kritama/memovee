@@ -8,7 +8,7 @@ defmodule Memovee.Memory do
   defdelegate list_posts(scope), to: Post.Manager, as: :list
   defdelegate get_post(scope, id), to: Post.Manager, as: :get
   defdelegate create_post(scope, attrs), to: Post.Manager, as: :create
-  defdelegate update_post(actor, post, attrs), to: Post.Manager, as: :update
+  defdelegate update_post(scope, post, attrs), to: Post.Manager, as: :update
   defdelegate change_post(post, attrs \\ %{}), to: Post.Manager, as: :change
 
   defdelegate list_tags(scope), to: Tag.Manager, as: :list
@@ -21,15 +21,15 @@ defmodule Memovee.Memory do
   defdelegate create_tag(scope, attrs), to: Tag.Manager, as: :create
   defdelegate update_tag(scope, tag, attrs), to: Tag.Manager, as: :update
   defdelegate change_tag(tag, attrs \\ %{}), to: Tag.Manager, as: :change
-  defdelegate list_post_tags(post), to: Tag.Manager, as: :list_for_post
+  defdelegate list_post_tags(scope, post), to: Tag.Manager, as: :list_for_post
 
   defdelegate tag_post(scope, post, tag), to: Tagging.Manager, as: :create
   defdelegate untag_post(scope, post, tag), to: Tagging.Manager, as: :delete
 
-  defdelegate list_post_projections(post), to: Projection.Manager, as: :list_for_post
-  defdelegate list_pending_projections(), to: Projection.Manager, as: :list_pending
-  defdelegate get_projection!(id), to: Projection.Manager, as: :get!
-  defdelegate create_projection(post, attrs), to: Projection.Manager, as: :create
+  defdelegate list_post_projections(scope, post), to: Projection.Manager, as: :list_for_post
+  defdelegate list_pending_projections(scope), to: Projection.Manager, as: :list_pending
+  defdelegate get_projection(scope, id), to: Projection.Manager, as: :get
+  defdelegate create_projection(scope, post, attrs), to: Projection.Manager, as: :create
   defdelegate change_projection(projection, attrs \\ %{}), to: Projection.Manager, as: :change
   defdelegate start_projection_sync(actor, projection), to: Projection.Manager, as: :sync
 

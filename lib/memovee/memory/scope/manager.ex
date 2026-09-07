@@ -26,6 +26,7 @@ defmodule Memovee.Memory.Scope.Manager do
     if Repo.in_transaction?(), do: lock_principals(scope)
 
     with %Actor{current_state: "active"} <- Repo.get(Actor, scope.token_actor_id),
+         true <- scope.service? or scope.token_actor_id == scope.actor.id,
          true <-
            not scope.service? or
              scope.token_actor_id == Application.get_env(:memovee, :memory_tama_actor_id),

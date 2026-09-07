@@ -5,7 +5,6 @@ defmodule Memovee.Memory.Post.Manager do
 
   import Ecto.Query, only: [from: 2]
 
-  alias Memovee.Accounts.Actor
   alias Memovee.Memory.{Post, Projection, Scope, Tag, Tagging}
   alias Memovee.Projections
   alias Memovee.Repo
@@ -142,28 +141,26 @@ defmodule Memovee.Memory.Post.Manager do
     end
   end
 
-  def update(%Actor{} = actor, %Post{} = post, attrs) do
+  def update(%Scope{} = scope, %Post{} = post, attrs) do
     Repo.transaction(fn ->
-      current = Repo.one!(from row in Post, where: row.id == ^post.id, lock: "FOR UPDATE")
+      scope = Scope.refresh(scope) |> unwrap()
 
-      authorize_update!(actor, current)
+      current =
+        Repo.one(
+          from row in Post,
+            where: row.id == ^post.id and row.owner_actor_id == ^scope.owner.id,
+            lock: "FOR UPDATE"
+        ) || Repo.rollback(:not_found)
 
       changeset = Post.changeset(current, attrs)
 
       updated = unwrap(Repo.update(changeset))
-      invalidate_sync(actor, current, updated)
+      invalidate_sync(scope.actor, current, updated)
 
       if Enum.any?([:title, :body, :metadata], &Map.has_key?(changeset.changes, &1)),
         do: unwrap(Projections.bump_indexing_revision(updated)),
         else: updated
     end)
-  end
-
-  defp authorize_update!(actor, post) do
-    case Scope.resolve(actor, %{}) do
-      {:ok, %{owner: %{id: owner_id}}} when owner_id == post.owner_actor_id -> :ok
-      _ -> Repo.rollback(:not_found)
-    end
   end
 
   defp invalidate_sync(actor, current, updated) do

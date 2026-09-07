@@ -54,7 +54,7 @@ defmodule Memovee.Memory.Tag do
 
   def prepare(values, metadata, graph?) when is_list(values) do
     with true <- length(values) <= 12,
-         true <- not graph? or Enum.all?(values, &graph_tag?/1),
+         true <- not graph? or (Enum.uniq(values) == values and Enum.all?(values, &graph_tag?/1)),
          {:ok, normalized} <- normalize_tags(values),
          {:ok, normalized} <- kind_tag(normalized, metadata, graph?) do
       tags =

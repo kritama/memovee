@@ -27,13 +27,14 @@ defmodule MemoveeWeb.Schemas.Tama.Memory.CreatePostRequest do
             type: :string,
             minLength: 1,
             maxLength: 32_768,
-            pattern: ~r/^[^\x00]*$/,
+            pattern: ~r/^(?=[^\x00]*\S)[^\x00]*$/,
             description: "At most 32768 Unicode code points"
           },
           metadata: MemoryMetadata,
           tags: %Schema{
             type: :array,
             maxItems: 12,
+            uniqueItems: true,
             items: %Schema{
               type: :object,
               additionalProperties: false,

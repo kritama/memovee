@@ -43,9 +43,15 @@ defmodule Memovee.Memory.Tag.Manager do
   end
 
   def create(%Scope{} = scope, attrs) do
-    with {:ok, scope} <- Scope.refresh(scope) do
-      %Tag{owner_actor_id: scope.owner.id} |> Tag.changeset(attrs) |> Repo.insert()
-    end
+    Repo.transaction(fn ->
+      with {:ok, scope} <- Scope.refresh(scope),
+           {:ok, tag} <-
+             %Tag{owner_actor_id: scope.owner.id} |> Tag.changeset(attrs) |> Repo.insert() do
+        tag
+      else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
   end
 
   def update(%Scope{} = scope, %Tag{} = tag, attrs) do
@@ -86,7 +92,13 @@ defmodule Memovee.Memory.Tag.Manager do
 
   def change(%Tag{} = tag, attrs \\ %{}), do: Tag.changeset(tag, attrs)
 
-  def list_for_post(%Post{} = post) do
+  def list_for_post(%Scope{} = scope, %Post{} = post) do
+    with {:ok, post} <- Post.Manager.get(scope, post.id) do
+      {:ok, tags_for_post(post)}
+    end
+  end
+
+  defp tags_for_post(post) do
     Tag
     |> join(:inner, [tag], tagging in Tagging, on: tagging.tag_id == tag.id)
     |> where([_tag, tagging], tagging.post_id == ^post.id)

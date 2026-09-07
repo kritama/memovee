@@ -372,6 +372,23 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
       ])
 
     assert key["pattern"] == "^[a-z0-9][a-z0-9._-]*$"
+
+    body_pattern =
+      get_in(spec, [
+        "components",
+        "schemas",
+        "CreateMemoryPostRequest",
+        "properties",
+        "post",
+        "properties",
+        "body",
+        "pattern"
+      ])
+      |> Regex.compile!()
+
+    refute Regex.match?(body_pattern, " \n\t ")
+    refute Regex.match?(body_pattern, "text\u0000")
+    assert Regex.match?(body_pattern, " \nMemory text\n ")
     pattern = Regex.compile!(key["pattern"])
     assert Regex.match?(pattern, "memovee.core-v1")
     refute Regex.match?(pattern, "has spaces")
@@ -431,6 +448,7 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
 
     for tags <- [
           List.duplicate(tag, 13),
+          List.duplicate(tag, 2),
           [Map.put(tag, "namespace", " Topic ")],
           [Map.put(tag, "key", "ELIXIR")],
           [Map.put(tag, "key", " elixir ")]

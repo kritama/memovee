@@ -70,11 +70,17 @@ defmodule Memovee.Projections.Indexing.Manager do
   def canonical_json(value), do: value |> order_keys() |> Jason.encode!()
 
   def bump(%Post{} = post) do
-    with {:ok, updated} <-
-           post |> change(memory_revision: post.memory_revision + 1) |> Repo.update(),
-         {:ok, _job} <- create(updated) do
-      {:ok, updated}
-    end
+    Repo.transaction(fn ->
+      current = Repo.one!(from row in Post, where: row.id == ^post.id, lock: "FOR UPDATE")
+
+      with {:ok, updated} <-
+             current |> change(memory_revision: current.memory_revision + 1) |> Repo.update(),
+           {:ok, _job} <- create(updated) do
+        updated
+      else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
   end
 
   # #13 supplies Oban-driven execution and callback fencing; declarations must not allow premature readiness.
@@ -90,6 +96,7 @@ defmodule Memovee.Projections.Indexing.Manager do
              where: actor.id == ^actor_id and actor.current_state == "active"
          ) do
       Ecto.Multi.new()
+      |> Ecto.Multi.run(:actor, fn repo, _ -> lock_service(repo, actor_id) end)
       |> Ecto.Multi.run(:revision, fn repo, _ -> superseded_revision(repo, changeset.data) end)
       |> Ecto.Multi.insert(:event, event_changeset)
       |> Ecto.Multi.update(:resource, changeset, stale_error_field: :current_state)
@@ -106,7 +113,18 @@ defmodule Memovee.Projections.Indexing.Manager do
     end
   end
 
+  defp lock_service(repo, actor_id) do
+    actor = repo.one(from actor in Actor, where: actor.id == ^actor_id, lock: "FOR SHARE")
+
+    if actor && actor.current_state == "active" &&
+         actor_id == Application.get_env(:memovee, :memory_tama_actor_id),
+       do: {:ok, actor},
+       else: {:error, :forbidden}
+  end
+
   defp superseded_revision(repo, projection) do
+    projection = repo.get!(Indexing, projection.id)
+
     post =
       repo.one!(
         from post in Post,

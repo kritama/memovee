@@ -59,4 +59,19 @@ defmodule Memovee.Memory.Tagging.ManagerTest do
     assert Repo.reload!(post).memory_revision == 3
     assert Repo.aggregate(Oban.Job, :count) == 3
   end
+
+  test "tag assignments cannot exceed the receipt limit", %{scope: scope, post: post} do
+    for index <- 1..12 do
+      {:ok, tag} =
+        Memory.create_tag(scope, %{namespace: "topic", key: "tag-#{index}", name: "Tag #{index}"})
+
+      assert {:ok, _} = Memory.tag_post(scope, post, tag)
+    end
+
+    {:ok, extra} = Memory.create_tag(scope, %{namespace: "topic", key: "extra", name: "Extra"})
+    assert {:error, :tag_limit} = Memory.tag_post(scope, post, extra)
+    assert Repo.aggregate(Tagging, :count) == 12
+    assert Repo.reload!(post).memory_revision == 13
+    assert Repo.aggregate(Oban.Job, :count) == 13
+  end
 end
