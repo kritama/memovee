@@ -52,6 +52,25 @@ defmodule Memovee.Memory.Post do
     |> check_constraint(:body_hash, name: :memory_posts_body_hash_format)
   end
 
+  @doc false
+  def structured?(%__MODULE__{origin_identifier: origin_identifier}),
+    do: is_binary(origin_identifier)
+
+  @doc false
+  def validate_structure(%__MODULE__{} = post, tags) when is_list(tags) do
+    metadata_changeset = Metadata.changeset(%Metadata{}, post.metadata)
+    kind = Ecto.Changeset.get_field(metadata_changeset, :kind)
+
+    kind_keys =
+      for tag <- tags,
+          tag_value(tag, :namespace) == "kind",
+          do: tag_value(tag, :key)
+
+    if metadata_changeset.valid? and kind_keys == [kind],
+      do: :ok,
+      else: {:error, :invalid_candidate}
+  end
+
   defp validate_structured_metadata(changeset, false), do: changeset
 
   defp validate_structured_metadata(changeset, true) do
@@ -75,4 +94,7 @@ defmodule Memovee.Memory.Post do
     |> :crypto.hash(body)
     |> Base.encode16(case: :lower)
   end
+
+  defp tag_value(tag, key) when is_map(tag),
+    do: Map.get(tag, key) || Map.get(tag, Atom.to_string(key))
 end

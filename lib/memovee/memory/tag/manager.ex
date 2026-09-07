@@ -83,6 +83,8 @@ defmodule Memovee.Memory.Tag.Manager do
           {:error, error} -> Repo.rollback(error)
         end
 
+      validate_structured_posts!(posts)
+
       if Enum.any?([:name, :description, :namespace, :key], &Map.has_key?(changeset.changes, &1)),
         do: Revision.bump_posts(scope, posts)
 
@@ -104,6 +106,13 @@ defmodule Memovee.Memory.Tag.Manager do
     |> where([_tag, tagging], tagging.post_id == ^post.id)
     |> order_by([tag], asc: tag.namespace, asc: tag.key)
     |> Repo.all()
+  end
+
+  defp validate_structured_posts!(posts) do
+    case Post.Manager.validate_structured_posts(posts) do
+      :ok -> :ok
+      {:error, reason} -> Repo.rollback(reason)
+    end
   end
 
   defp normalize_key(value), do: value |> String.trim() |> String.downcase()

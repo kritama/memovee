@@ -77,10 +77,11 @@ defmodule Memovee.Memory.Post.Manager do
 
     metadata = Ecto.Changeset.get_field(changeset, :metadata)
     tags = unwrap(Tag.prepare(Map.get(attrs, "tags", []), metadata, scope.service?))
-    authorize_references!(scope, metadata)
+    if scope.service?, do: authorize_references!(scope.owner.id, metadata)
     post = changeset |> Repo.insert() |> unwrap()
 
     Enum.each(tags, &attach_tag(post, &1))
+    unwrap(validate_structured_posts([post]))
     unwrap(Projections.create_indexing(scope, post))
     saved(scope, post, false)
   end
@@ -125,14 +126,14 @@ defmodule Memovee.Memory.Post.Manager do
     %{post: post, receipt: receipt, replayed: replayed}
   end
 
-  defp authorize_references!(scope, metadata) do
+  defp authorize_references!(owner_id, metadata) do
     ids = Map.get(metadata, "derived_from_post_ids", [])
 
-    if scope.service? and ids != [] do
+    if ids != [] do
       count =
         Repo.aggregate(
           from(post in Post,
-            where: post.id in ^ids and post.owner_actor_id == ^scope.owner.id
+            where: post.id in ^ids and post.owner_actor_id == ^owner_id
           ),
           :count
         )
@@ -153,6 +154,12 @@ defmodule Memovee.Memory.Post.Manager do
         ) || Repo.rollback(:not_found)
 
       changeset = Post.changeset(current, attrs)
+      candidate = Ecto.Changeset.apply_changes(changeset)
+
+      if Post.structured?(candidate) do
+        unwrap(validate_structured_posts([candidate]))
+        authorize_references!(scope.owner.id, candidate.metadata)
+      end
 
       updated = unwrap(Repo.update(changeset))
       invalidate_sync(scope.actor, current, updated)
@@ -168,8 +175,32 @@ defmodule Memovee.Memory.Post.Manager do
       do: unwrap(Projection.Manager.invalidate_for_post(actor, updated))
   end
 
+  defp unwrap(:ok), do: :ok
   defp unwrap({:ok, value}), do: value
   defp unwrap({:error, error}), do: Repo.rollback(error)
+
+  @doc false
+  def validate_structured_posts(posts) when is_list(posts) do
+    structured_posts = Enum.filter(posts, &Post.structured?/1)
+    post_ids = Enum.map(structured_posts, & &1.id)
+
+    tags_by_post =
+      Repo.all(
+        from tagging in Tagging,
+          join: tag in Tag,
+          on: tag.id == tagging.tag_id,
+          where: tagging.post_id in ^post_ids,
+          select: {tagging.post_id, tag}
+      )
+      |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+
+    Enum.reduce_while(structured_posts, :ok, fn post, :ok ->
+      case Post.validate_structure(post, Map.get(tags_by_post, post.id, [])) do
+        :ok -> {:cont, :ok}
+        error -> {:halt, error}
+      end
+    end)
+  end
 
   def change(%Post{} = post, attrs \\ %{}), do: Post.changeset(post, attrs)
 end

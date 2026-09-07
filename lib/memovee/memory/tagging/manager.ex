@@ -17,6 +17,7 @@ defmodule Memovee.Memory.Tagging.Manager do
           {:error, error} -> Repo.rollback(error)
         end
 
+      validate_structured_post!(post)
       Revision.bump_posts(scope, [post])
       tagging
     end)
@@ -32,7 +33,11 @@ defmodule Memovee.Memory.Tagging.Manager do
             where: tagging.post_id == ^post.id and tagging.tag_id == ^tag.id
         )
 
-      if count > 0, do: Revision.bump_posts(scope, [post])
+      if count > 0 do
+        validate_structured_post!(post)
+        Revision.bump_posts(scope, [post])
+      end
+
       {count, nil}
     end)
     |> case do
@@ -63,5 +68,12 @@ defmodule Memovee.Memory.Tagging.Manager do
       ) || Repo.rollback(:not_found)
 
     {post, tag}
+  end
+
+  defp validate_structured_post!(post) do
+    case Post.Manager.validate_structured_posts([post]) do
+      :ok -> :ok
+      {:error, reason} -> Repo.rollback(reason)
+    end
   end
 end

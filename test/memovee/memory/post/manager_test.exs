@@ -1,4 +1,4 @@
-defmodule Memovee.Memory.PostPersistenceTest do
+defmodule Memovee.Memory.Post.ManagerTest do
   use Memovee.DataCase, async: false
   import Memovee.AccountsFixtures
   alias Memovee.Memory.{Post, Scope, Tag, Tagging}
@@ -165,6 +165,87 @@ defmodule Memovee.Memory.PostPersistenceTest do
     assert {:error, :forbidden} = Post.Manager.create(scope, candidate())
     {:ok, unowned} = Memovee.Accounts.Actor.Manager.get_or_create_agent("unowned-test")
     assert {:error, :forbidden} = Scope.resolve(unowned, %{})
+  end
+
+  test "structured post updates preserve candidate metadata and the kind tag", %{
+    scope: scope,
+    agent: agent,
+    service: service
+  } do
+    {:ok, direct} = Scope.resolve(agent, %{})
+    {:ok, result} = Post.Manager.create(scope, candidate())
+
+    assert {:error, :invalid_candidate} =
+             Post.Manager.update(direct, result.post, %{metadata: %{"kind" => "preference"}})
+
+    changed_kind = candidate()["metadata"] |> Map.put("kind", "fact")
+
+    assert {:error, :invalid_candidate} =
+             Post.Manager.update(direct, result.post, %{metadata: changed_kind})
+
+    invalid_references =
+      candidate()["metadata"] |> Map.put("derived_from_post_ids", "not-a-list")
+
+    assert {:error, :invalid_candidate} =
+             Post.Manager.update(direct, result.post, %{metadata: invalid_references})
+
+    other_owner = user_fixture().actor
+
+    {:ok, other_scope} =
+      Scope.resolve(service, %{
+        "context" => %{"actor_id" => other_owner.id, "origin_identifier" => "other:source"}
+      })
+
+    {:ok, other_result} = Post.Manager.create(other_scope, candidate())
+
+    foreign_reference =
+      candidate()["metadata"]
+      |> Map.put("derived_from_post_ids", [other_result.post.id])
+
+    assert {:error, :invalid_candidate} =
+             Post.Manager.update(direct, result.post, %{metadata: foreign_reference})
+
+    changed_approval =
+      candidate()["metadata"] |> Map.put("approval", "reported_approved")
+
+    assert {:ok, updated} =
+             Post.Manager.update(direct, result.post, %{metadata: changed_approval})
+
+    assert updated.metadata == changed_approval
+    assert updated.memory_revision == 2
+    assert Repo.aggregate(Indexing, :count) == 3
+    assert Repo.aggregate(Oban.Job, :count) == 3
+  end
+
+  test "structured post tag mutations preserve exactly one matching kind tag", %{
+    scope: scope,
+    agent: agent
+  } do
+    {:ok, direct} = Scope.resolve(agent, %{})
+    {:ok, result} = Post.Manager.create(scope, candidate())
+    kind_tag = Repo.one!(from tag in Tag, where: tag.namespace == "kind")
+
+    assert {:error, :invalid_candidate} =
+             Tag.Manager.update(direct, kind_tag, %{key: "fact"})
+
+    assert Repo.reload!(kind_tag).key == "preference"
+    assert {:error, :invalid_candidate} = Tagging.Manager.delete(direct, result.post, kind_tag)
+
+    {:ok, other_kind} =
+      Tag.Manager.create(direct, %{namespace: "kind", key: "fact", name: "Fact"})
+
+    assert {:error, :invalid_candidate} =
+             Tagging.Manager.create(direct, result.post, other_kind)
+
+    {:ok, topic} =
+      Tag.Manager.create(direct, %{namespace: "topic", key: "elixir", name: "Elixir"})
+
+    assert {:ok, _tagging} = Tagging.Manager.create(direct, result.post, topic)
+    assert {1, nil} = Tagging.Manager.delete(direct, result.post, topic)
+    assert Repo.aggregate(Tagging, :count) == 2
+    assert Repo.reload!(result.post).memory_revision == 3
+    assert Repo.aggregate(Indexing, :count) == 3
+    assert Repo.aggregate(Oban.Job, :count) == 3
   end
 
   test "idempotency is owner and origin scoped and provenance stays authorized", %{
