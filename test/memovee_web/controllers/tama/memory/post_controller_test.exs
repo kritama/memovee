@@ -6,6 +6,7 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
 
   alias Memovee.Memory.Post
   alias Memovee.Repo
+  alias MemoveeWeb.Tama.ApiSpec
 
   setup do
     owner = user_fixture().actor
@@ -22,10 +23,16 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
       "metadata" => %{"source" => "agent"}
     }
 
+    assert_request_schema(
+      %{"post" => attrs},
+      "DirectMemoryPostRequest",
+      ApiSpec.spec()
+    )
+
     conn =
       conn
       |> authorize(credential)
-      |> post(~p"/tama/memory/posts", attrs)
+      |> post(~p"/tama/memory/posts", %{"post" => attrs})
 
     assert_operation_response(conn, "memory_post_create")
 
@@ -57,7 +64,7 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
     conn =
       conn
       |> authorize(credential)
-      |> post(~p"/tama/memory/posts", %{"body" => "A memory without metadata."})
+      |> post(~p"/tama/memory/posts", %{"post" => %{"body" => "A memory without metadata."}})
 
     assert %{"data" => %{"metadata" => %{}}} = json_response(conn, 201)
   end
@@ -73,10 +80,28 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
       conn =
         build_conn()
         |> authorize(credential)
-        |> post(~p"/tama/memory/posts", request)
+        |> post(~p"/tama/memory/posts", %{"post" => request})
 
       assert %{"error" => %{"code" => "invalid_request"}} = json_response(conn, 422)
       assert_operation_response(conn, "memory_post_create")
+    end
+
+    assert Repo.aggregate(Post, :count) == 0
+  end
+
+  test "requires a post object and rejects misplaced or unexpected fields", %{
+    credential: credential
+  } do
+    for attrs <- [
+          %{},
+          %{"post" => nil},
+          %{"post" => []},
+          %{"body" => "unnested"},
+          %{"post" => %{"body" => "valid"}, "title" => "misplaced"},
+          %{"post" => %{"body" => "valid", "context" => %{}}}
+        ] do
+      conn = build_conn() |> authorize(credential) |> post(~p"/tama/memory/posts", attrs)
+      assert %{"error" => %{"code" => "invalid_request"}} = json_response(conn, 422)
     end
 
     assert Repo.aggregate(Post, :count) == 0

@@ -3,6 +3,8 @@ defmodule MemoveeWeb.Tama.Memory.PostReplayTest do
   import Memovee.AccountsFixtures
   import OpenApiSpex.TestAssertions
 
+  alias MemoveeWeb.Tama.ApiSpec
+
   setup do
     owner = user_fixture().actor
     agent = agent_fixture(owner)
@@ -26,19 +28,27 @@ defmodule MemoveeWeb.Tama.Memory.PostReplayTest do
   } do
     attrs = %{
       context: context,
-      title: nil,
-      body: "Use Req.",
-      tags: [],
-      metadata: %{
-        kind: "preference",
-        epistemic_status: "user_stated",
-        approval: "unspecified",
-        source: %{channel: "agent", reference: nil},
-        occurred_at: nil,
-        effective_at: nil,
-        derived_from_post_ids: []
+      post: %{
+        title: nil,
+        body: "Use Req.",
+        tags: [],
+        metadata: %{
+          kind: "preference",
+          epistemic_status: "user_stated",
+          approval: "unspecified",
+          source: %{channel: "agent", reference: nil},
+          occurred_at: nil,
+          effective_at: nil,
+          derived_from_post_ids: []
+        }
       }
     }
+
+    assert_request_schema(
+      Jason.decode!(Jason.encode!(attrs)),
+      "GraphMemoryPostRequest",
+      ApiSpec.spec()
+    )
 
     conn = request(credential, "/tama/memory/posts", attrs)
     assert_operation_response(conn, "memory_post_create")
@@ -47,7 +57,7 @@ defmodule MemoveeWeb.Tama.Memory.PostReplayTest do
              json_response(conn, 201)
 
     conn =
-      request(credential, "/tama/memory/posts", %{context: context, body: nil})
+      request(credential, "/tama/memory/posts", %{context: context, post: %{body: nil}})
 
     assert %{"data" => %{"id" => ^post_id, "receipt" => %{"replayed" => true}}} =
              json_response(conn, 200)

@@ -34,8 +34,10 @@ defmodule MemoveeWeb.Tama.Memory.PostController do
   def create(conn, attrs) do
     with {:ok, scope} <- Scope.resolve(conn.assigns.current_scope.actor, attrs),
          true <-
-           Enum.all?(Map.keys(attrs), &(&1 in ~w(context title body metadata tags))),
-         {:ok, result} <- Post.Manager.create(scope, attrs) do
+           Enum.all?(Map.keys(attrs), &(&1 in ~w(context post))),
+         post_attrs when is_map(post_attrs) <- Map.get(attrs, "post"),
+         true <- Enum.all?(Map.keys(post_attrs), &(&1 in ~w(title body metadata tags))),
+         {:ok, result} <- Post.Manager.create(scope, post_attrs) do
       conn
       |> put_status(if(result.replayed, do: 200, else: 201))
       |> render(:show, post: result.post, receipt: result.receipt)

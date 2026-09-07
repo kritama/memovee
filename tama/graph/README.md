@@ -117,7 +117,43 @@ integration verification. #16 owns the full memory evaluation suite.
 
 Memovee publishes `memory_post_create` at `POST /tama/memory/posts` in
 `/tama/openapi`. Tama retains the original message, extracts the structured Post,
-and submits it directly with the runtime-owned `context`.
+and submits it under `post`, with the runtime-owned `context` alongside it.
+
+```json
+{
+  "context": {
+    "actor_id": "01990000-0000-7000-8000-000000000001",
+    "origin_identifier": "mcp-app:message:v1:example"
+  },
+  "post": {
+    "title": "Memovee HTTP client preference",
+    "body": "For Memovee, I prefer Req for HTTP calls.",
+    "metadata": {
+      "kind": "preference",
+      "epistemic_status": "user_stated",
+      "approval": "unspecified",
+      "source": {
+        "channel": "agent",
+        "reference": null
+      },
+      "occurred_at": null,
+      "effective_at": null,
+      "derived_from_post_ids": []
+    },
+    "tags": [
+      {
+        "namespace": "tool",
+        "key": "req",
+        "name": "Req"
+      }
+    ]
+  }
+}
+```
+
+Ordinary agents send `{"post": {...}}` without `context`. Context injection remains
+at `/body/context/actor_id` and `/body/context/origin_identifier`; generated fields
+are nested under `/body/post`.
 
 Set `MEMOVEE_MEMORY_TAMA_ACTOR_ID` to the dedicated service Actor's UUID and supply
 that Actor's existing API credential to the graph API source. Ordinary agent
