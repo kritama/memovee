@@ -12,3 +12,10 @@
 
 # Tama Kit local HTTPS certificate material
 /tls/
+
+# Application-owned memory runtime secrets, plans and process records
+/.memory.env
+/.memory/
+*.tfplan
+*.tfvars
+*.tfvars.json

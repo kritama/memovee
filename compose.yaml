@@ -1,6 +1,19 @@
 name: kritama-memovee
 
 services:
+  memory-redis:
+    image: redis:8.2.1
+    command: [redis-server, --appendonly, "yes"]
+    ports:
+      - "127.0.0.1:6380:6379"
+    volumes:
+      - memovee-memory-redis-data:/data
+    healthcheck:
+      test: [CMD, redis-cli, PING]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
   postgres:
     image: postgres:16-alpine
     environment:
@@ -20,3 +33,5 @@ services:
 
 volumes:
   postgres_data:
+  memovee-memory-redis-data:
+    name: memovee-memory-redis-data

@@ -1,0 +1,219 @@
+{
+  "title": "MemoryCandidateV1Provider",
+  "description": "Structured provider wrapper for MemoryCandidateV1",
+  "type": "object",
+  "properties": {
+    "value": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "decision": {
+              "const": "save"
+            },
+            "post": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 255
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "body": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 32768,
+                  "pattern": "\\S"
+                },
+                "metadata": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "fact",
+                        "preference",
+                        "decision",
+                        "brief",
+                        "progress",
+                        "review",
+                        "procedure"
+                      ]
+                    },
+                    "epistemic_status": {
+                      "enum": [
+                        "user_stated",
+                        "observed",
+                        "proposed",
+                        "inferred",
+                        "reported"
+                      ]
+                    },
+                    "approval": {
+                      "enum": [
+                        "unspecified",
+                        "proposed",
+                        "reported_approved"
+                      ]
+                    },
+                    "source": {
+                      "type": "object",
+                      "properties": {
+                        "channel": {
+                          "const": "agent"
+                        },
+                        "reference": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 512
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "channel",
+                        "reference"
+                      ],
+                      "additionalProperties": false,
+                      "title": "Source",
+                      "description": "Normative Memovee memory v1 Source contract. Semantic checks in C1-C10 also apply."
+                    },
+                    "occurred_at": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "effective_at": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "derived_from_post_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "maxItems": 20,
+                      "minItems": 0
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "epistemic_status",
+                    "approval",
+                    "source",
+                    "occurred_at",
+                    "effective_at",
+                    "derived_from_post_ids"
+                  ],
+                  "additionalProperties": false,
+                  "title": "Metadata",
+                  "description": "Normative Memovee memory v1 Metadata contract. Semantic checks in C1-C10 also apply."
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "namespace": {
+                        "enum": [
+                          "kind",
+                          "project",
+                          "topic",
+                          "tool"
+                        ]
+                      },
+                      "key": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100,
+                        "pattern": "^[a-z0-9][a-z0-9._-]*$"
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 255
+                      }
+                    },
+                    "required": [
+                      "namespace",
+                      "key",
+                      "name"
+                    ],
+                    "additionalProperties": false,
+                    "title": "Tag",
+                    "description": "Normative Memovee memory v1 Tag contract. Semantic checks in C1-C10 also apply."
+                  },
+                  "maxItems": 12,
+                  "minItems": 0
+                }
+              },
+              "required": [
+                "title",
+                "body",
+                "metadata",
+                "tags"
+              ],
+              "additionalProperties": false,
+              "title": "Post",
+              "description": "Normative Memovee memory v1 Post contract. Semantic checks in C1-C10 also apply."
+            }
+          },
+          "required": [
+            "decision",
+            "post"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "decision": {
+              "const": "clarify"
+            },
+            "question": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 400
+            }
+          },
+          "required": [
+            "decision",
+            "question"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "title": "MemoryCandidateV1",
+      "description": "Normative Memovee memory v1 MemoryCandidateV1 contract. Semantic checks in C1-C10 also apply."
+    }
+  },
+  "required": [
+    "value"
+  ],
+  "additionalProperties": false
+}

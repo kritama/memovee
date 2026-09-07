@@ -1,0 +1,20 @@
+{
+  "title": "memory-projection-request",
+  "description": "Background projection lease supplied by the Memovee dispatcher; no user context.",
+  "type": "object",
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "lease_token": {
+      "type": "string",
+      "format": "uuid"
+    }
+  },
+  "required": [
+    "job_id",
+    "lease_token"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,163 @@
+{
+  "title": "AnswerCandidateProvider",
+  "description": "Structured provider wrapper for AnswerCandidate",
+  "type": "object",
+  "properties": {
+    "value": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "outcome": {
+              "const": "answered"
+            },
+            "claims": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 400
+                  },
+                  "post_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "maxItems": 10,
+                    "minItems": 1
+                  }
+                },
+                "required": [
+                  "text",
+                  "post_ids"
+                ],
+                "additionalProperties": false,
+                "title": "Claim",
+                "description": "Normative Memovee memory v1 Claim contract. Semantic checks in C1-C10 also apply."
+              },
+              "maxItems": 5,
+              "minItems": 1
+            },
+            "question": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "outcome",
+            "claims",
+            "question"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "outcome": {
+              "const": "clarification_required"
+            },
+            "claims": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 400
+                  },
+                  "post_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "maxItems": 10,
+                    "minItems": 1
+                  }
+                },
+                "required": [
+                  "text",
+                  "post_ids"
+                ],
+                "additionalProperties": false,
+                "title": "Claim",
+                "description": "Normative Memovee memory v1 Claim contract. Semantic checks in C1-C10 also apply."
+              },
+              "maxItems": 0,
+              "minItems": 0
+            },
+            "question": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 400
+            }
+          },
+          "required": [
+            "outcome",
+            "claims",
+            "question"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "outcome": {
+              "const": "empty"
+            },
+            "claims": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 400
+                  },
+                  "post_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "maxItems": 10,
+                    "minItems": 1
+                  }
+                },
+                "required": [
+                  "text",
+                  "post_ids"
+                ],
+                "additionalProperties": false,
+                "title": "Claim",
+                "description": "Normative Memovee memory v1 Claim contract. Semantic checks in C1-C10 also apply."
+              },
+              "maxItems": 0,
+              "minItems": 0
+            },
+            "question": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "outcome",
+            "claims",
+            "question"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "title": "AnswerCandidate",
+      "description": "Normative Memovee memory v1 AnswerCandidate contract. Semantic checks in C1-C10 also apply."
+    }
+  },
+  "required": [
+    "value"
+  ],
+  "additionalProperties": false
+}

@@ -32,6 +32,16 @@ Memovee runs Elixir and Phoenix on the host and uses Docker Compose with OrbStac
 
 Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
 
+Memovee also owns the memory Redis service in the root `compose.yaml`. Start it
+when working on memory indexing:
+
+```sh
+docker compose up -d --wait memory-redis
+```
+
+It is available to host processes at `redis://127.0.0.1:6380/0` and persists data
+with AOF in the `memovee-memory-redis-data` volume.
+
 ## Tests
 
 Tests use a separate `memovee_test` database on the same PostgreSQL service:
@@ -101,7 +111,7 @@ forwarding headers and uses the direct socket peer address.
 
 ## Database Lifecycle
 
-Stop PostgreSQL without removing its data:
+Stop the development services without removing their data:
 
 ```sh
 docker compose stop
@@ -113,7 +123,8 @@ Remove the containers and network while preserving database data:
 docker compose down
 ```
 
-To also delete all local development and test databases, run `docker compose down -v`.
+To also delete all local development and test databases and memory Redis data,
+run `docker compose down -v`.
 
 Ready to run in production? Please [check our deployment guides](https://phoenix.hexdocs.pm/deployment.html).
 
