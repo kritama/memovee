@@ -12,4 +12,39 @@ defmodule Memovee.Memory.Ingestion do
     field :saved_receipt, :map
     timestamps(type: :utc_datetime)
   end
+
+  @doc false
+  def changeset(ingestion, attrs) do
+    ingestion
+    |> cast(attrs, [:original_content])
+    |> validate_required([
+      :owner_actor_id,
+      :created_by_actor_id,
+      :origin_identifier,
+      :original_content
+    ])
+    |> validate_change(:original_content, fn :original_content, content ->
+      if String.valid?(content) and String.trim(content) != "",
+        do: [],
+        else: [original_content: "must be nonblank UTF-8 text"]
+    end)
+    |> put_source_hash()
+    |> foreign_key_constraint(:owner_actor_id)
+    |> foreign_key_constraint(:created_by_actor_id)
+    |> unique_constraint([:owner_actor_id, :origin_identifier])
+  end
+
+  defp put_source_hash(changeset) do
+    case fetch_change(changeset, :original_content) do
+      {:ok, content} when is_binary(content) ->
+        put_change(
+          changeset,
+          :source_hash,
+          :crypto.hash(:sha256, content) |> Base.encode16(case: :lower)
+        )
+
+      _ ->
+        changeset
+    end
+  end
 end

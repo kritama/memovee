@@ -61,31 +61,22 @@ defmodule Memovee.Memory.Ingestion.Manager do
   end
 
   defp open_locked(scope, content) do
-    if not String.valid?(content) or String.trim(content) == "", do: abort(:invalid_content)
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
-
-    {count, _} =
-      Repo.insert_all(
-        Ingestion,
-        [
-          %{
-            id: Ecto.UUID.generate(version: 7, precision: :monotonic),
-            owner_actor_id: scope.owner.id,
-            created_by_actor_id: scope.actor.id,
-            origin_identifier: scope.origin_identifier,
-            original_content: content,
-            source_hash: Candidate.hash(content),
-            inserted_at: now,
-            updated_at: now
-          }
-        ],
+    inserted =
+      %Ingestion{
+        owner_actor_id: scope.owner.id,
+        created_by_actor_id: scope.actor.id,
+        origin_identifier: scope.origin_identifier
+      }
+      |> Ingestion.changeset(%{original_content: content})
+      |> Repo.insert(
         on_conflict: :nothing,
         conflict_target: [:owner_actor_id, :origin_identifier]
       )
+      |> unwrap()
 
     ingestion = Repo.one!(from ingestion in query(scope), lock: "FOR UPDATE")
     if ingestion.original_content != content, do: abort(:ingestion_conflict)
-    %{record: ingestion, replayed: count == 0}
+    %{record: ingestion, replayed: inserted.id != ingestion.id}
   end
 
   defp save_ingestion(%Scope{service?: true} = scope, attrs) do
