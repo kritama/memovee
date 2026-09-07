@@ -7,7 +7,7 @@ defmodule Memovee.Memory.Post.Manager do
 
   alias Memovee.Accounts.Actor
   alias Memovee.Memory.{Candidate, Post, Projection, Scope, Tag, Tagging}
-  alias Memovee.Projections.Indexing
+  alias Memovee.Projections
   alias Memovee.Repo
 
   def list(%Scope{} = scope) do
@@ -80,7 +80,7 @@ defmodule Memovee.Memory.Post.Manager do
       |> unwrap()
 
     Enum.each(tags, &attach_tag(post, &1))
-    unwrap(Indexing.Manager.create_pending(post))
+    unwrap(Projections.create_pending_indexing(post))
     saved(post, false)
   end
 
@@ -103,12 +103,7 @@ defmodule Memovee.Memory.Post.Manager do
   end
 
   defp saved(post, replayed) do
-    projection =
-      Repo.get_by!(Indexing,
-        post_id: post.id,
-        revision: post.memory_revision,
-        profile: "memory-v1"
-      )
+    projection = Projections.get_post_indexing!(post)
 
     tag_ids =
       Repo.all(
@@ -157,7 +152,7 @@ defmodule Memovee.Memory.Post.Manager do
       invalidate_sync(actor, current, updated)
 
       if Enum.any?([:title, :body, :metadata], &Map.has_key?(changeset.changes, &1)),
-        do: unwrap(Indexing.Manager.bump(updated)),
+        do: unwrap(Projections.bump_indexing_revision(updated)),
         else: updated
     end)
   end

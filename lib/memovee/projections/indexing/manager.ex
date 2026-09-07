@@ -9,6 +9,14 @@ defmodule Memovee.Projections.Indexing.Manager do
   alias Memovee.Repo
   alias Memovee.Workers.MemoryProjection
 
+  def get_for_post!(%Post{} = post) do
+    Repo.get_by!(Indexing,
+      post_id: post.id,
+      revision: post.memory_revision,
+      profile: "memory-v1"
+    )
+  end
+
   def create_pending(%Post{} = post) do
     tags =
       Repo.all(
