@@ -119,7 +119,7 @@ defmodule Memovee.Memory.PostPersistenceTest do
 
     [tag] = Repo.all(Tag)
     assert tag.description == "Original"
-    assert {:ok, _} = Tag.Manager.update(tag, %{description: "Explicit edit"})
+    assert {:ok, _} = Tag.Manager.update(direct, tag, %{description: "Explicit edit"})
     assert Repo.get!(Post, first.post.id).memory_revision == 2
     assert Repo.aggregate(Indexing, :count) == 4
     assert {:ok, updated} = Post.Manager.update(agent, first.post, %{title: "New title"})

@@ -48,9 +48,20 @@ defmodule Memovee.Memory.Tag.Manager do
     end
   end
 
-  def update(%Tag{} = tag, attrs) do
+  def update(%Scope{} = scope, %Tag{} = tag, attrs) do
     Repo.transaction(fn ->
-      current = Repo.one!(from row in Tag, where: row.id == ^tag.id, lock: "FOR UPDATE")
+      scope =
+        case Scope.refresh(scope) do
+          {:ok, refreshed} -> refreshed
+          {:error, reason} -> Repo.rollback(reason)
+        end
+
+      current =
+        Repo.one(
+          from row in Tag,
+            where: row.id == ^tag.id and row.owner_actor_id == ^scope.owner.id,
+            lock: "FOR UPDATE"
+        ) || Repo.rollback(:not_found)
 
       ids =
         Repo.all(

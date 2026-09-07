@@ -19,7 +19,7 @@ defmodule Memovee.Memory do
     as: :get_by_namespace_and_key
 
   defdelegate create_tag(scope, attrs), to: Tag.Manager, as: :create
-  defdelegate update_tag(tag, attrs), to: Tag.Manager, as: :update
+  defdelegate update_tag(scope, tag, attrs), to: Tag.Manager, as: :update
   defdelegate change_tag(tag, attrs \\ %{}), to: Tag.Manager, as: :change
   defdelegate list_post_tags(post), to: Tag.Manager, as: :list_for_post
 

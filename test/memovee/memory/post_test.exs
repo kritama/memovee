@@ -70,4 +70,14 @@ defmodule Memovee.Memory.PostTest do
 
     refute Post.changeset(%Post{}, %{body: "source", title: String.duplicate("e\u0301", 128)}).valid?
   end
+
+  test "published body boundary fixtures match validation" do
+    fixtures = File.read!("tama/graph/schemas/memory-fixtures.v1.json") |> Jason.decode!()
+
+    for boundary <- fixtures["boundaries"] do
+      body = String.duplicate(boundary["repeat"], boundary["count"])
+      assert byte_size(body) == boundary["utf8_bytes"]
+      assert Post.changeset(%Post{}, %{body: body}).valid? == boundary["accepted"], boundary["id"]
+    end
+  end
 end
