@@ -51,4 +51,23 @@ defmodule Memovee.Memory.PostTest do
              "metadata" => %{"arbitrary" => [1, true, nil]}
            }).valid?
   end
+
+  test "rejects NUL in text and nested metadata strings or keys" do
+    for attrs <- [
+          %{"title" => "bad\u0000title"},
+          %{"body" => "bad\u0000body"},
+          %{"metadata" => %{"nested" => [%{"value" => "bad\u0000value"}]}},
+          %{"metadata" => %{"nested" => [%{"bad\u0000key" => true}]}}
+        ] do
+      refute Post.changeset(%Post{}, Map.merge(%{"body" => "source"}, attrs)).valid?
+    end
+  end
+
+  test "title limits count Unicode code points" do
+    for title <- [String.duplicate("😀", 255), String.duplicate("e\u0301", 127) <> "e"] do
+      assert Post.changeset(%Post{}, %{body: "source", title: title}).valid?
+    end
+
+    refute Post.changeset(%Post{}, %{body: "source", title: String.duplicate("e\u0301", 128)}).valid?
+  end
 end

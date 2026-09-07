@@ -32,7 +32,13 @@ defmodule MemoveeWeb.Schemas.Tama.Memory.MemoryMetadata do
         required: [:channel, :reference],
         properties: %{
           channel: %Schema{type: :string, enum: ["agent"]},
-          reference: %Schema{type: :string, nullable: true, minLength: 1, maxLength: 512}
+          reference: %Schema{
+            type: :string,
+            nullable: true,
+            minLength: 1,
+            maxLength: 512,
+            pattern: ~r/^[^\x00]*$/
+          }
         }
       },
       occurred_at: %Schema{type: :string, format: :"date-time", nullable: true},

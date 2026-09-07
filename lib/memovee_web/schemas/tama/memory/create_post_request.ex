@@ -16,11 +16,18 @@ defmodule MemoveeWeb.Schemas.Tama.Memory.CreatePostRequest do
         additionalProperties: false,
         required: [:title, :body, :metadata, :tags],
         properties: %{
-          title: %Schema{type: :string, nullable: true, minLength: 1, maxLength: 255},
+          title: %Schema{
+            type: :string,
+            nullable: true,
+            minLength: 1,
+            maxLength: 255,
+            pattern: ~r/^[^\x00]*$/
+          },
           body: %Schema{
             type: :string,
             minLength: 1,
             maxLength: 32_768,
+            pattern: ~r/^[^\x00]*$/,
             description: "At most 32768 UTF-8 bytes"
           },
           metadata: MemoryMetadata,
@@ -33,8 +40,18 @@ defmodule MemoveeWeb.Schemas.Tama.Memory.CreatePostRequest do
               required: [:namespace, :key, :name],
               properties: %{
                 namespace: %Schema{type: :string, enum: ~w(kind project topic tool)},
-                key: %Schema{type: :string, minLength: 1, maxLength: 100},
-                name: %Schema{type: :string, minLength: 1, maxLength: 255}
+                key: %Schema{
+                  type: :string,
+                  minLength: 1,
+                  maxLength: 100,
+                  pattern: ~r/^[a-z0-9][a-z0-9._-]*$/
+                },
+                name: %Schema{
+                  type: :string,
+                  minLength: 1,
+                  maxLength: 255,
+                  pattern: ~r/^[^\x00]*$/
+                }
               }
             }
           }

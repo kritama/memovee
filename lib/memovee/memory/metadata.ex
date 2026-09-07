@@ -50,6 +50,19 @@ defmodule Memovee.Memory.Metadata do
   def changeset(metadata, _attrs),
     do: metadata |> change() |> add_error(:base, "must be an object")
 
+  def validate_strings(field, value) do
+    if contains_nul?(value), do: [{field, "must not contain NUL characters"}], else: []
+  end
+
+  defp contains_nul?(value) when is_binary(value), do: String.contains?(value, <<0>>)
+
+  defp contains_nul?(value) when is_map(value) do
+    Enum.any?(value, fn {key, child} -> contains_nul?(to_string(key)) or contains_nul?(child) end)
+  end
+
+  defp contains_nul?(value) when is_list(value), do: Enum.any?(value, &contains_nul?/1)
+  defp contains_nul?(_), do: false
+
   def reserved?(value) when is_map(value) do
     Enum.any?(value, fn {key, child} -> to_string(key) in @reserved or reserved?(child) end)
   end

@@ -325,4 +325,56 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
     |> :crypto.hash(body)
     |> Base.encode16(case: :lower)
   end
+
+  test "invalid persisted text returns 422 without creating a post", %{
+    credential: credential,
+    context: context
+  } do
+    post = memory_post()
+
+    for invalid <- [
+          Map.put(post, "body", "bad\u0000body"),
+          Map.put(post, "title", "bad\u0000title"),
+          put_in(post, ["metadata", "source", "reference"], "bad\u0000reference"),
+          Map.put(post, "tags", [
+            %{"namespace" => "topic", "key" => "elixir", "name" => "bad\u0000name"}
+          ]),
+          Map.put(post, "title", String.duplicate("e\u0301", 128)),
+          Map.put(post, "tags", [
+            %{
+              "namespace" => "topic",
+              "key" => "elixir",
+              "name" => String.duplicate("e\u0301", 128)
+            }
+          ])
+        ] do
+      conn = request(credential, "/tama/memory/posts", %{context: context, post: invalid})
+      assert %{"error" => %{"code" => "invalid_request"}} = json_response(conn, 422)
+      assert Repo.aggregate(Post, :count) == 0
+    end
+  end
+
+  test "OpenAPI publishes the canonical tag key format" do
+    spec = build_conn() |> get("/tama/openapi") |> json_response(200)
+
+    key =
+      get_in(spec, [
+        "components",
+        "schemas",
+        "CreateMemoryPostRequest",
+        "properties",
+        "post",
+        "properties",
+        "tags",
+        "items",
+        "properties",
+        "key"
+      ])
+
+    assert key["pattern"] == "^[a-z0-9][a-z0-9._-]*$"
+    pattern = Regex.compile!(key["pattern"])
+    assert Regex.match?(pattern, "memovee.core-v1")
+    refute Regex.match?(pattern, "has spaces")
+    refute Regex.match?(pattern, "slash/key")
+  end
 end

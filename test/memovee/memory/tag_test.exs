@@ -65,4 +65,26 @@ defmodule Memovee.Memory.TagTest do
       assert {:error, :invalid_tags} = Tag.prepare([attrs], %{}, false)
     end
   end
+
+  test "rejects NUL in display text and nested metadata" do
+    for attrs <- [
+          %{name: "bad\u0000name"},
+          %{description: "bad\u0000description"},
+          %{metadata: %{"nested" => [%{"value" => "bad\u0000value"}]}},
+          %{metadata: %{"nested" => [%{"bad\u0000key" => nil}]}}
+        ] do
+      attrs = Map.merge(%{namespace: "topic", key: "elixir", name: "Elixir"}, attrs)
+      refute Tag.changeset(%Tag{}, attrs).valid?
+    end
+  end
+
+  test "name limits count Unicode code points" do
+    attrs = %{namespace: "topic", key: "elixir"}
+
+    for name <- [String.duplicate("😀", 255), String.duplicate("e\u0301", 127) <> "e"] do
+      assert Tag.changeset(%Tag{}, Map.put(attrs, :name, name)).valid?
+    end
+
+    refute Tag.changeset(%Tag{}, Map.put(attrs, :name, String.duplicate("e\u0301", 128))).valid?
+  end
 end

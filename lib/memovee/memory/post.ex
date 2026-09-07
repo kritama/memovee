@@ -29,7 +29,7 @@ defmodule Memovee.Memory.Post do
     post
     |> cast(attrs, [:title, :body, :metadata], empty_values: [])
     |> validate_required([:body, :metadata])
-    |> validate_length(:title, min: 1, max: 255)
+    |> validate_length(:title, min: 1, max: 255, count: :codepoints)
     |> validate_change(:body, fn :body, body ->
       cond do
         not String.valid?(body) -> [body: "must be valid UTF-8"]
@@ -37,6 +37,9 @@ defmodule Memovee.Memory.Post do
         true -> []
       end
     end)
+    |> validate_format(:title, ~r/^[^\x00]*$/, message: "must not contain NUL characters")
+    |> validate_format(:body, ~r/^[^\x00]*$/, message: "must not contain NUL characters")
+    |> validate_change(:metadata, &Metadata.validate_strings/2)
     |> validate_change(:metadata, fn :metadata, metadata ->
       if Metadata.reserved?(metadata),
         do: [metadata: "contains reserved fields"],

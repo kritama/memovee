@@ -34,12 +34,15 @@ defmodule Memovee.Memory.Tag do
     |> validate_required([:namespace, :key, :name, :metadata])
     |> validate_length(:namespace, max: 100)
     |> validate_length(:key, max: 100)
-    |> validate_length(:name, max: 255)
+    |> validate_length(:name, max: 255, count: :codepoints)
     |> validate_format(:namespace, @key_format)
     |> validate_format(:key, @key_format)
     |> validate_change(:name, fn :name, name ->
       if String.trim(name) == "", do: [name: "can't be blank"], else: []
     end)
+    |> validate_format(:name, ~r/^[^\x00]*$/, message: "must not contain NUL characters")
+    |> validate_format(:description, ~r/^[^\x00]*$/, message: "must not contain NUL characters")
+    |> validate_change(:metadata, &Metadata.validate_strings/2)
     |> validate_change(:metadata, fn :metadata, metadata ->
       if Metadata.reserved?(metadata), do: [metadata: "contains reserved fields"], else: []
     end)
