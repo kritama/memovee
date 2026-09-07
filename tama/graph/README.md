@@ -151,14 +151,14 @@ and submits it under `post`, with the runtime-owned `context` alongside it.
 }
 ```
 
-Ordinary agents send `{"post": {...}}` without `context`. Context injection remains
+The save endpoint accepts only the configured Tama service. Context injection remains
 at `/body/context/actor_id` and `/body/context/origin_identifier`; generated fields
 are nested under `/body/post`.
 
 Set `MEMOVEE_MEMORY_TAMA_ACTOR_ID` to the dedicated service Actor's UUID and supply
-that Actor's existing API credential to the graph API source. Ordinary agent
-credentials resolve ownership through their active human owner; only the configured
-service may assert `context.actor_id` and `context.origin_identifier`.
+that Actor's existing API credential to the graph API source. Agents submit memories
+through `remember`; the service supplies `context.actor_id` and
+`context.origin_identifier` on their behalf. Ordinary API credentials cannot save directly.
 
 The Post stores the trusted origin identifier. A transaction lock and unique index
 on owner/origin ensure concurrent retries create one Post, its tags, search projection
@@ -169,8 +169,7 @@ snapshot. An uncertain save can retry the same POST once with the same trusted c
 If that retry is also inconclusive, report `save_unconfirmed` rather than assuming
 nothing was saved.
 
-Ownership is required from the first migration. Ordinary agent submissions remain
-supported without context and create a fresh Post on each request. There is no
+Ownership is required from the first migration. There is no
 ingestion model, pre-extraction registration or status endpoint. #12 owns the graph
 save caller, #13 owns indexing execution, and #14 owns search.
 

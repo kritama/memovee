@@ -22,7 +22,7 @@ defmodule MemoveeWeb.Tama.Memory.PostReplayTest do
     }
   end
 
-  test "direct save and replay publish the documented envelopes", %{
+  test "service save and replay publish the documented envelopes", %{
     credential: credential,
     context: context
   } do
@@ -46,7 +46,7 @@ defmodule MemoveeWeb.Tama.Memory.PostReplayTest do
 
     assert_request_schema(
       Jason.decode!(Jason.encode!(attrs)),
-      "GraphMemoryPostRequest",
+      "CreateMemoryPostRequest",
       ApiSpec.spec()
     )
 
@@ -63,12 +63,18 @@ defmodule MemoveeWeb.Tama.Memory.PostReplayTest do
              json_response(conn, 200)
   end
 
+  test "ordinary agents cannot bypass remember", %{ordinary: ordinary} do
+    assert %{"error" => %{"code" => "forbidden"}} =
+             request(ordinary, "/tama/memory/posts", %{post: %{body: "Use Req."}})
+             |> json_response(403)
+  end
+
   test "ordinary context assertions are rejected before validation", %{ordinary: ordinary} do
     assert %{"error" => %{"code" => "forbidden_context"}} =
              request(ordinary, "/tama/memory/posts", %{context: nil}) |> json_response(403)
   end
 
-  test "the OpenAPI exposes only the direct save operation", %{
+  test "the OpenAPI exposes only the save operation", %{
     credential: credential,
     context: context
   } do

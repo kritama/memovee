@@ -19,7 +19,7 @@ defmodule MemoveeWeb.Tama.Memory.PostController do
   operation :create,
     operation_id: "memory_post_create",
     summary: "Create a memory post",
-    description: "Creates a canonical memory post and derives its body hash.",
+    description: "Creates a canonical memory post from the trusted Tama remember flow.",
     request_body:
       {"Memory post attributes", "application/json", CreatePostRequest, required: true},
     responses: [
@@ -33,6 +33,7 @@ defmodule MemoveeWeb.Tama.Memory.PostController do
 
   def create(conn, attrs) do
     with {:ok, scope} <- Scope.resolve(conn.assigns.current_scope.actor, attrs),
+         :ok <- require_service(scope),
          true <-
            Enum.all?(Map.keys(attrs), &(&1 in ~w(context post))),
          post_attrs when is_map(post_attrs) <- Map.get(attrs, "post"),
@@ -46,4 +47,7 @@ defmodule MemoveeWeb.Tama.Memory.PostController do
       _ -> Error.render(conn, :invalid_request)
     end
   end
+
+  defp require_service(%Scope{service?: true}), do: :ok
+  defp require_service(_scope), do: {:error, :forbidden}
 end

@@ -1,5 +1,5 @@
 defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
-  use MemoveeWeb.ConnCase, async: true
+  use MemoveeWeb.ConnCase, async: false
 
   import Memovee.AccountsFixtures
   import OpenApiSpex.TestAssertions
@@ -11,43 +11,48 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
   setup do
     owner = user_fixture().actor
     agent = agent_fixture(owner)
-    credential = api_token_fixture(owner, agent)
+    service = agent_fixture(owner)
+    credential = api_token_fixture(owner, service)
+    previous = Application.get_env(:memovee, :memory_tama_actor_id)
+    Application.put_env(:memovee, :memory_tama_actor_id, service.id)
+    on_exit(fn -> Application.put_env(:memovee, :memory_tama_actor_id, previous) end)
+    context = %{"actor_id" => agent.id, "origin_identifier" => "mcp-app:message:v1:test"}
 
-    %{credential: credential}
+    %{credential: credential, context: context}
   end
 
-  test "creates a canonical memory post", %{conn: conn, credential: credential} do
-    attrs = %{
-      "title" => "Launch notes",
-      "body" => "The launch is scheduled for Friday.",
-      "metadata" => %{"source" => "agent"}
-    }
+  test "creates a canonical memory post", %{conn: conn, credential: credential, context: context} do
+    attrs =
+      File.read!("tama/graph/schemas/memory-fixtures.v1.json")
+      |> Jason.decode!()
+      |> get_in(["extraction", Access.at(0), "expected", "post"])
 
     assert_request_schema(
-      %{"post" => attrs},
-      "DirectMemoryPostRequest",
+      %{"context" => context, "post" => attrs},
+      "CreateMemoryPostRequest",
       ApiSpec.spec()
     )
 
     conn =
       conn
       |> authorize(credential)
-      |> post(~p"/tama/memory/posts", %{"post" => attrs})
+      |> post(~p"/tama/memory/posts", %{"context" => context, "post" => attrs})
 
     assert_operation_response(conn, "memory_post_create")
 
     assert %{
              "data" => %{
                "id" => id,
-               "title" => "Launch notes",
+               "title" => "Memovee HTTP preference",
                "body" => body,
                "body_hash" => body_hash,
-               "metadata" => %{"source" => "agent"},
+               "metadata" => metadata,
                "inserted_at" => inserted_at,
                "updated_at" => updated_at
              }
            } = json_response(conn, 201)
 
+    assert metadata == attrs["metadata"]
     assert body == attrs["body"]
     assert body_hash == sha256(body)
     assert is_binary(inserted_at)
@@ -60,16 +65,23 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
     assert post.metadata == attrs["metadata"]
   end
 
-  test "defaults metadata when it is omitted", %{conn: conn, credential: credential} do
+  test "rejects missing structured metadata", %{
+    conn: conn,
+    credential: credential,
+    context: context
+  } do
     conn =
       conn
       |> authorize(credential)
-      |> post(~p"/tama/memory/posts", %{"post" => %{"body" => "A memory without metadata."}})
+      |> post(~p"/tama/memory/posts", %{
+        "context" => context,
+        "post" => %{"body" => "A memory without metadata."}
+      })
 
-    assert %{"data" => %{"metadata" => %{}}} = json_response(conn, 201)
+    assert %{"error" => %{"code" => "invalid_request"}} = json_response(conn, 422)
   end
 
-  test "rejects invalid and server-owned attributes", %{credential: credential} do
+  test "rejects invalid and server-owned attributes", %{credential: credential, context: context} do
     invalid_requests = [
       %{},
       %{"body" => " \n\t "},
@@ -80,7 +92,7 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
       conn =
         build_conn()
         |> authorize(credential)
-        |> post(~p"/tama/memory/posts", %{"post" => request})
+        |> post(~p"/tama/memory/posts", %{"context" => context, "post" => request})
 
       assert %{"error" => %{"code" => "invalid_request"}} = json_response(conn, 422)
       assert_operation_response(conn, "memory_post_create")
@@ -90,7 +102,8 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
   end
 
   test "requires a post object and rejects misplaced or unexpected fields", %{
-    credential: credential
+    credential: credential,
+    context: context
   } do
     for attrs <- [
           %{},
@@ -100,7 +113,11 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
           %{"post" => %{"body" => "valid"}, "title" => "misplaced"},
           %{"post" => %{"body" => "valid", "context" => %{}}}
         ] do
-      conn = build_conn() |> authorize(credential) |> post(~p"/tama/memory/posts", attrs)
+      conn =
+        build_conn()
+        |> authorize(credential)
+        |> post(~p"/tama/memory/posts", Map.put(attrs, "context", context))
+
       assert %{"error" => %{"code" => "invalid_request"}} = json_response(conn, 422)
     end
 

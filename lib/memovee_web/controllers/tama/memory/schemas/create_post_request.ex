@@ -1,11 +1,11 @@
-defmodule MemoveeWeb.Tama.Memory.Schemas.GraphPostRequest do
+defmodule MemoveeWeb.Tama.Memory.Schemas.CreatePostRequest do
   @moduledoc false
   require OpenApiSpex
   alias MemoveeWeb.Tama.Memory.Schemas.{Context, MemoryMetadata}
   alias OpenApiSpex.Schema
 
   OpenApiSpex.schema(%{
-    title: "GraphMemoryPostRequest",
+    title: "CreateMemoryPostRequest",
     type: :object,
     additionalProperties: false,
     required: [:context, :post],
