@@ -28,7 +28,7 @@ resource "tama_prompt" "memory-write-generation-input" {
 
 resource "tama_class" "memory-candidate-provider" {
   space_id    = tama_space.memory-write.id
-  schema_json = jsonencode(jsondecode(file("${path.module}/schemas/MemoryCandidateV1Provider.json")))
+  schema_json = jsonencode(jsondecode(file("${path.module}/schemas/memory-candidate-v1-provider.json")))
 }
 
 # Handler foundation; issue #12 supplies the executable chain.

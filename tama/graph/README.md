@@ -31,6 +31,7 @@ Tama Kit rerun issue.
 Terraform reads it to define the root result classes. `schemas/fixtures.json`
 holds the examples from #16 for future tests; nothing currently consumes it.
 JSON schemas in `schemas/` are read directly by Terraform.
+Use lowercase kebab-case filenames, such as `memory-candidate-v1-provider.json`.
 The provider schemas wrap the domain value for structured model output.
 Backend ownership, payload semantics and idempotency belong in #10's Elixir code
 and tests; Terraform configuration validation cannot enforce them.

@@ -28,12 +28,12 @@ resource "tama_prompt" "memory-query-generation-input" {
 
 resource "tama_class" "query-candidate-provider" {
   space_id    = tama_space.memory-query.id
-  schema_json = jsonencode(jsondecode(file("${path.module}/schemas/QueryCandidateProvider.json")))
+  schema_json = jsonencode(jsondecode(file("${path.module}/schemas/query-candidate-provider.json")))
 }
 
 resource "tama_class" "answer-candidate-provider" {
   space_id    = tama_space.memory-query.id
-  schema_json = jsonencode(jsondecode(file("${path.module}/schemas/AnswerCandidateProvider.json")))
+  schema_json = jsonencode(jsondecode(file("${path.module}/schemas/answer-candidate-provider.json")))
 }
 
 # Handler foundation; issue #15 supplies the executable chain.
