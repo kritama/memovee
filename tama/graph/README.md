@@ -17,9 +17,10 @@ terraform -chdir=tama plan
 `terraform test` runs the optional mock-provider checks without deploying anything.
 Applying a reviewed plan requires explicit deployment authorization.
 
-`memory_override.tf` selects provider 0.7.0 while leaving Tama Kit's generated
-files and manifest hashes unchanged. Base 0.5.6 and `module.global` retain their
-existing addresses. Use Terraform consistently for the tracked provider lockfile.
+`tama/versions.tf` pins provider 0.7.0 directly. Base 0.5.6 and `module.global`
+retain their existing addresses. Use Terraform consistently for the tracked
+provider lockfile. Future Tama Kit reruns must preserve this application pin and
+reconcile the manifest's original generated-file hash; it has not been rewritten.
 The local instance is already bootstrapped; ordinary graph validation and planning
 do not rerun bootstrap. Its existing manifest/topology mismatch remains a separate
 Tama Kit rerun issue.
