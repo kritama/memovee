@@ -1,4 +1,4 @@
-defmodule MemoveeWeb.Tama.ApiSpec do
+defmodule MemoveeWeb.Schemas.Tama.ApiSpec do
   @moduledoc """
   OpenAPI specification for the Tama API.
   """

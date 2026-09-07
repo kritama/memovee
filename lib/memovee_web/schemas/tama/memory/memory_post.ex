@@ -1,4 +1,4 @@
-defmodule MemoveeWeb.Tama.Memory.Schemas.MemoryPost do
+defmodule MemoveeWeb.Schemas.Tama.Memory.MemoryPost do
   @moduledoc """
   API representation of a canonical memory post.
   """
@@ -12,7 +12,7 @@ defmodule MemoveeWeb.Tama.Memory.Schemas.MemoryPost do
     type: :object,
     additionalProperties: false,
     properties: %{
-      receipt: MemoveeWeb.Tama.Memory.Schemas.SaveReceipt,
+      receipt: MemoveeWeb.Schemas.Tama.Memory.SaveReceipt,
       id: %Schema{type: :string, format: :uuid},
       title: %Schema{type: :string, nullable: true},
       body: %Schema{type: :string},

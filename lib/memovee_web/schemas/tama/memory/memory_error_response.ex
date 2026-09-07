@@ -1,4 +1,4 @@
-defmodule MemoveeWeb.Tama.Memory.Schemas.MemoryErrorResponse do
+defmodule MemoveeWeb.Schemas.Tama.Memory.MemoryErrorResponse do
   @moduledoc false
   require OpenApiSpex
   alias OpenApiSpex.Schema

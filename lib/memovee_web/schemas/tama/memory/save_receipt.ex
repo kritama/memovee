@@ -1,4 +1,4 @@
-defmodule MemoveeWeb.Tama.Memory.Schemas.SaveReceipt do
+defmodule MemoveeWeb.Schemas.Tama.Memory.SaveReceipt do
   @moduledoc false
   require OpenApiSpex
   alias OpenApiSpex.Schema

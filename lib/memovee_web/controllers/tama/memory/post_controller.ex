@@ -5,7 +5,7 @@ defmodule MemoveeWeb.Tama.Memory.PostController do
   alias Memovee.Memory.{Post, Scope}
   alias MemoveeWeb.Tama.Memory.Error
 
-  alias MemoveeWeb.Tama.Memory.Schemas.{
+  alias MemoveeWeb.Schemas.Tama.Memory.{
     CreatePostRequest,
     MemoryErrorResponse,
     MemoryPostResponse,

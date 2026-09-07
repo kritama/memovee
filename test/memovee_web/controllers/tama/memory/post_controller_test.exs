@@ -6,7 +6,7 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
 
   alias Memovee.Memory.Post
   alias Memovee.Repo
-  alias MemoveeWeb.Tama.ApiSpec
+  alias MemoveeWeb.Schemas.Tama.ApiSpec
 
   setup do
     owner = user_fixture().actor

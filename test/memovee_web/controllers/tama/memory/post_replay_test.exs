@@ -3,7 +3,7 @@ defmodule MemoveeWeb.Tama.Memory.PostReplayTest do
   import Memovee.AccountsFixtures
   import OpenApiSpex.TestAssertions
 
-  alias MemoveeWeb.Tama.ApiSpec
+  alias MemoveeWeb.Schemas.Tama.ApiSpec
 
   setup do
     owner = user_fixture().actor

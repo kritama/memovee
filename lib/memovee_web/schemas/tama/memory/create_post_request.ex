@@ -1,7 +1,7 @@
-defmodule MemoveeWeb.Tama.Memory.Schemas.CreatePostRequest do
+defmodule MemoveeWeb.Schemas.Tama.Memory.CreatePostRequest do
   @moduledoc false
   require OpenApiSpex
-  alias MemoveeWeb.Tama.Memory.Schemas.{Context, MemoryMetadata}
+  alias MemoveeWeb.Schemas.Tama.Memory.{Context, MemoryMetadata}
   alias OpenApiSpex.Schema
 
   OpenApiSpex.schema(%{

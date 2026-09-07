@@ -1,4 +1,4 @@
-defmodule MemoveeWeb.Tama.Memory.Schemas.UnauthorizedResponse do
+defmodule MemoveeWeb.Schemas.Tama.Memory.UnauthorizedResponse do
   @moduledoc """
   Response body returned when Tama API authentication fails.
   """

@@ -1,4 +1,4 @@
-defmodule MemoveeWeb.Tama.Memory.Schemas.MemoryMetadata do
+defmodule MemoveeWeb.Schemas.Tama.Memory.MemoryMetadata do
   @moduledoc false
   require OpenApiSpex
   alias OpenApiSpex.Schema
