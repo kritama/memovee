@@ -78,7 +78,7 @@ compatibility before enabling those chains.
 See the [OpenRouter API guide](https://openrouter.ai/docs/quickstart).
 
 Manage local services directly with Docker Compose and Mix. Memovee owns
-PostgreSQL and Redis in the root `compose.yaml`:
+PostgreSQL and Redis in the root `compose.yml`:
 
 ```sh
 docker compose up -d --wait postgres memory-redis

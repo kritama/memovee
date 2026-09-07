@@ -2,53 +2,42 @@
 
 ## Development
 
-Memovee runs Elixir and Phoenix on the host and uses Docker Compose with OrbStack for PostgreSQL. The committed `.envrc` points Ecto to `postgres.kritama-memovee.orb.local`, so PostgreSQL does not need to publish or occupy a host port.
+Tama is required for development. The root `compose.yml` runs Memovee,
+PostgreSQL and Redis, and includes Tama's generated Compose configuration for
+Tama, its database and Caddy. Memovee runs in development mode with source mounts
+and code reload; Tama uses its production release image.
 
-1. Allow direnv to load the development environment:
-
-   ```sh
-   direnv allow
-   ```
-
-2. Start PostgreSQL and wait for it to become healthy:
-
-   ```sh
-   docker compose up -d --wait postgres
-   ```
-
-3. Install dependencies and prepare the development database:
-
-   ```sh
-   mix setup
-   ```
-
-4. Start the Phoenix endpoint:
-
-   ```sh
-   mix phx.server
-   ```
-
-   To run the endpoint inside IEx instead, use `iex -S mix phx.server`.
-
-Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
-
-Memovee also owns the memory Redis service in the root `compose.yaml`. Start it
-when working on memory indexing:
+Prepare the local Tama environment and certificates using the
+[local setup instructions](tama/README.md) before starting a fresh checkout.
+For an already bootstrapped checkout, start the full stack from the project root:
 
 ```sh
-docker compose up -d --wait memory-redis
+docker compose up -d --build
+docker compose ps
 ```
 
-It is available to host processes at `redis://127.0.0.1:6380/0` and persists data
-with AOF in the `memovee-memory-redis-data` volume.
+Open Memovee at [https://app.localhost](https://app.localhost) and Tama at
+[https://tama.app.localhost](https://tama.app.localhost).
+
+The Memovee container installs dependencies, prepares its development database
+and starts Phoenix. Run application commands inside it:
+
+```sh
+docker compose exec memovee mix ecto.migrate
+docker compose logs -f memovee
+```
+
+Memovee owns the `memory-redis` service. Other containers can reach it at
+`redis://memory-redis:6379/0`; the host endpoint is
+`redis://127.0.0.1:6380/0`. Redis persists data with AOF in the
+`memovee-memory-redis-data` volume.
 
 ## Tests
 
-Tests use a separate `memovee_test` database on the same PostgreSQL service:
+Run tests against the separate test database:
 
 ```sh
-docker compose up -d --wait postgres
-mix test
+docker compose exec memovee mix test
 ```
 
 ## OAuth authorization server
