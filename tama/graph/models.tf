@@ -7,7 +7,7 @@ module "inference" {
   api_key             = var.openrouter_api_key
   requests_per_second = 2
   models = [{
-    identifier = "openai/gpt-4.1-mini"
+    identifier = "z-ai/glm-5.3-flash"
     path       = "/chat/completions"
   }]
 }

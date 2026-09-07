@@ -236,7 +236,7 @@ output "interfaces" {
     global_space_id            = var.global_space_id
     context_metadata_corpus_id = var.context_metadata_corpus_id
     action_call_json_corpus_id = var.action_call_json_corpus_id
-    completion_model_id        = module.inference.model_ids["openai/gpt-4.1-mini"]
+    completion_model_id        = module.inference.model_ids["z-ai/glm-5.3-flash"]
     ready                      = false
   }
 }

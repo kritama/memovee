@@ -56,9 +56,12 @@ the embeddings OpenAPI source. Tama #114–#116 remain runtime prerequisites.
 ## Local development
 
 Inference uses OpenRouter's `https://openrouter.ai/api/v1/chat/completions`
-endpoint with model `openai/gpt-4.1-mini`, following the existing `memovee-tama`
-integration. This is OpenRouter's model identifier, not the previous dated
-OpenAI snapshot pin. Record the actual served model/provider in live evaluations.
+endpoint with model `z-ai/glm-5.3-flash`, following the existing `memovee-tama`
+integration pattern. Record the actual served model/provider in live evaluations.
+OpenRouter's [model reference](https://openrouter.ai/z-ai/glm-5.3-flash) lists JSON output support without JSON-schema
+enforcement. Generation consumers must validate candidates and apply the bounded
+repair/failure behavior before any write; verify the runtime's output-format
+compatibility before enabling those chains.
 See the [OpenRouter API guide](https://openrouter.ai/docs/quickstart).
 
 `scripts/memory-dev {start|stop|check|plan} [--dry-run]` is a shell wrapper for
