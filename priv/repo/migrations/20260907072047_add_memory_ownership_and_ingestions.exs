@@ -54,10 +54,7 @@ defmodule Memovee.Repo.Migrations.AddMemoryOwnershipAndIngestions do
       add :profile, :string, null: false, default: "memory-v1"
       add :current_state, :string, null: false, default: "pending"
       add :current_state_version, :integer, null: false, default: 0
-      add :attempts, :integer, null: false, default: 0
-      add :available_at, :utc_datetime_usec, null: false
       add :lease_token, :uuid
-      add :lease_expires_at, :utc_datetime_usec
       add :description, :text
       add :chunks, {:array, :map}
       add :last_error, :map
@@ -66,7 +63,6 @@ defmodule Memovee.Repo.Migrations.AddMemoryOwnershipAndIngestions do
     end
 
     create unique_index(:memory_projection_jobs, [:post_id, :revision, :profile])
-    create index(:memory_projection_jobs, [:current_state, :available_at])
 
     create constraint(:memory_projection_jobs, :projection_revision_positive,
              check: "revision >= 1"

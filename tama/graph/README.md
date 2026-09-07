@@ -134,5 +134,19 @@ Ownership is required from the first migration. This system is not deployed and
 has no legacy backfill or ownership-assignment task. Ordinary agent submissions
 with title/body/metadata remain supported and receive a fresh internal submission
 ID plus a receipt. Graph submissions require typed metadata and an opened
-submission. The graph save caller remains work for #12; #13 owns job dispatch,
-leases and Redis indexing, and #14 owns search.
+submission. The graph save caller remains work for #12; #13 owns the indexing
+worker and Redis integration, and #14 owns search.
+
+Projection scheduling uses [Oban](https://oban.hexdocs.pm/Oban.html). Every new
+projection revision inserts an Oban job in the same database transaction. Oban
+owns queue execution, attempts, retry scheduling and orphaned-job recovery; there
+is no custom dispatcher or lease-renewal loop. The memory projection record keeps
+revision/fingerprint, generated artifacts and durable readiness independently of
+Oban's job retention. Its existing `lease_token` field is reserved for fencing
+future asynchronous graph callbacks, not queue scheduling.
+
+The `memory_projection` queue has concurrency four and starts paused until #13
+implements execution. Jobs allow five attempts with retry delays of 1, 5, 30 and
+120 seconds. Tests use Oban's manual mode. The worker deliberately returns an
+error if invoked before the pipeline is implemented, rather than acknowledging
+indexing success.

@@ -7,6 +7,13 @@
 # General application configuration
 import Config
 
+config :memovee, Oban,
+  repo: Memovee.Repo,
+  engine: Oban.Engines.Basic,
+  queues: [memory_projection: [limit: 4, paused: true]],
+  lifeline: [rescue_after: {5, :minutes}],
+  pruner: [max_age: {7, :days}]
+
 config :memovee, :scopes,
   user: [
     default: true,

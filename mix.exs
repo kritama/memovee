@@ -54,6 +54,7 @@ defmodule Memovee.MixProject do
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.14"},
       {:eventful, "~> 3.3"},
+      {:oban, "~> 2.24.1"},
       {:hammer, "~> 7.0"},
       {:nebulex, "~> 3.0"},
       {:nebulex_local, "~> 3.0"},

@@ -2,9 +2,11 @@ defmodule Memovee.Memory.ProjectionJob.Manager do
   @moduledoc "Persists pending indexing work. Worker execution belongs to the indexing integration."
   import Ecto.Query
   import Ecto.Changeset
+  alias Ecto.Multi
   alias Memovee.Accounts.Actor
   alias Memovee.Memory.{Candidate, Post, ProjectionJob, Tag, Tagging}
   alias Memovee.Repo
+  alias Memovee.Workers.MemoryProjection
 
   def create_pending(%Post{} = post) do
     tags =
@@ -34,12 +36,22 @@ defmodule Memovee.Memory.ProjectionJob.Manager do
       owner_actor_id: post.owner_actor_id,
       post_id: post.id,
       revision: post.memory_revision,
-      fingerprint: fingerprint(value),
-      available_at: DateTime.utc_now()
+      fingerprint: fingerprint(value)
     }
     |> change()
     |> unique_constraint([:post_id, :revision, :profile])
-    |> Repo.insert()
+    |> then(fn changeset ->
+      Multi.new()
+      |> Multi.insert(:projection, changeset)
+      |> Oban.insert(:job, fn %{projection: projection} ->
+        MemoryProjection.new(%{projection_id: projection.id})
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{projection: projection}} -> {:ok, projection}
+        {:error, _step, reason, _changes} -> {:error, reason}
+      end
+    end)
   end
 
   def fingerprint(value), do: value |> canonical_json() |> Candidate.hash()
@@ -67,7 +79,7 @@ defmodule Memovee.Memory.ProjectionJob.Manager do
     end
   end
 
-  # #13 supplies lease-aware implementations; declarations must not allow premature readiness.
+  # #13 supplies Oban-driven execution and callback fencing; declarations must not allow premature readiness.
   def worker_transition(_changes), do: {:error, %Eventful.Error{code: :worker_not_implemented}}
 
   def invalidate_transition({changeset, event_changeset}) do

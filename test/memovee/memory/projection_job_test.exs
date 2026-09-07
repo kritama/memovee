@@ -29,4 +29,31 @@ defmodule Memovee.Memory.ProjectionJobTest do
     assert event.actor_id == service.id
     assert <<_::48, 7::4, _::76>> = Ecto.UUID.dump!(event.id)
   end
+
+  test "Oban insertion participates in save rollback and revision transactions" do
+    owner = user_fixture().actor
+    agent = agent_fixture(owner)
+    {:ok, scope} = Scope.resolve(agent, %{})
+
+    assert {:error, :forced_rollback} =
+             Repo.transaction(fn ->
+               {:ok, _} = Ingestion.Manager.save(scope, %{"body" => "rolled back"})
+               Repo.rollback(:forced_rollback)
+             end)
+
+    assert Repo.aggregate(ProjectionJob, :count) == 0
+    assert Repo.aggregate(Oban.Job, :count) == 0
+
+    {:ok, result} = Ingestion.Manager.save(scope, %{"body" => "saved"})
+    job = Repo.one!(Oban.Job)
+    projection = Repo.get_by!(ProjectionJob, post_id: result.post.id)
+    assert job.args == %{"projection_id" => projection.id}
+    assert job.worker == "Memovee.Workers.MemoryProjection"
+    assert job.queue == "memory_projection"
+    assert job.max_attempts == 5
+    assert job.state == "available"
+    assert {:ok, _} = Memovee.Memory.Post.Manager.update(agent, result.post, %{body: "revised"})
+    assert Repo.aggregate(Oban.Job, :count) == 2
+    assert Repo.aggregate(ProjectionJob, :count) == 2
+  end
 end
