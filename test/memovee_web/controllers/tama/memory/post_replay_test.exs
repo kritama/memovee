@@ -3,6 +3,8 @@ defmodule MemoveeWeb.Tama.Memory.PostReplayTest do
   import Memovee.AccountsFixtures
   import OpenApiSpex.TestAssertions
 
+  alias Memovee.Memory.Post
+  alias Memovee.Repo
   alias MemoveeWeb.Schemas.Tama.ApiSpec
 
   setup do
@@ -61,6 +63,46 @@ defmodule MemoveeWeb.Tama.Memory.PostReplayTest do
 
     assert %{"data" => %{"id" => ^post_id, "receipt" => %{"replayed" => true}}} =
              json_response(conn, 200)
+  end
+
+  test "origin identifiers are limited to 512 Unicode code points", %{
+    credential: credential,
+    context: context
+  } do
+    post =
+      File.read!("tama/graph/schemas/memory-fixtures.v1.json")
+      |> Jason.decode!()
+      |> get_in(["extraction", Access.at(0), "expected", "post"])
+
+    for character <- ["a", "😀"] do
+      attrs = %{
+        "context" => Map.put(context, "origin_identifier", String.duplicate(character, 512)),
+        "post" => post
+      }
+
+      assert_request_schema(attrs, "CreateMemoryPostRequest", ApiSpec.spec())
+      assert request(credential, "/tama/memory/posts", attrs).status == 201
+    end
+
+    count = Repo.aggregate(Post, :count)
+
+    for origin <- [
+          String.duplicate("a", 513),
+          String.duplicate("😀", 513),
+          String.duplicate("e\u0301", 257)
+        ] do
+      attrs = %{context: Map.put(context, "origin_identifier", origin), post: post}
+      conn = request(credential, "/tama/memory/posts", attrs)
+      assert %{"error" => %{"code" => "invalid_request"}} = json_response(conn, 422)
+      assert_operation_response(conn, "memory_post_create")
+      assert Repo.aggregate(Post, :count) == count
+    end
+
+    spec = build_conn() |> get("/tama/openapi") |> json_response(200)
+
+    assert spec["components"]["schemas"]["MemoryContext"]["properties"]["origin_identifier"][
+             "maxLength"
+           ] == 512
   end
 
   test "ordinary agents cannot bypass remember", %{ordinary: ordinary} do
