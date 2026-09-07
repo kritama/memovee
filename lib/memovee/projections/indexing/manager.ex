@@ -5,7 +5,7 @@ defmodule Memovee.Projections.Indexing.Manager do
   alias Ecto.Multi
   alias Jason.OrderedObject
   alias Memovee.Accounts.Actor
-  alias Memovee.Memory.{Candidate, Post, Tag, Tagging}
+  alias Memovee.Memory.{Post, Tag, Tagging}
   alias Memovee.Projections.Indexing
   alias Memovee.Projections.Indexing.Worker
   alias Memovee.Repo
@@ -63,7 +63,9 @@ defmodule Memovee.Projections.Indexing.Manager do
     end)
   end
 
-  def fingerprint(value), do: value |> canonical_json() |> Candidate.hash()
+  def fingerprint(value) do
+    :crypto.hash(:sha256, canonical_json(value)) |> Base.encode16(case: :lower)
+  end
 
   def canonical_json(value), do: value |> order_keys() |> Jason.encode!()
 

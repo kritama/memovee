@@ -5,7 +5,7 @@ defmodule Memovee.Memory.Post do
 
   use Memovee.Schema
 
-  alias Memovee.Memory.{Candidate, Projection, Tagging}
+  alias Memovee.Memory.{Metadata, Projection, Tagging}
 
   schema "memory_posts" do
     belongs_to :owner_actor, Memovee.Accounts.Actor
@@ -25,32 +25,48 @@ defmodule Memovee.Memory.Post do
   end
 
   @doc false
-  def changeset(post, attrs) do
+  def changeset(post, attrs, opts \\ []) do
     post
-    |> cast(attrs, [:title, :body, :metadata])
+    |> cast(attrs, [:title, :body, :metadata], empty_values: [])
     |> validate_required([:body, :metadata])
-    |> validate_length(:title, max: 255)
+    |> validate_length(:title, min: 1, max: 255)
     |> validate_change(:body, fn :body, body ->
-      if byte_size(body) > 32_768, do: [body: "exceeds 32768 UTF-8 bytes"], else: []
+      cond do
+        not String.valid?(body) -> [body: "must be valid UTF-8"]
+        byte_size(body) > 32_768 -> [body: "exceeds 32768 UTF-8 bytes"]
+        true -> []
+      end
     end)
     |> validate_change(:metadata, fn :metadata, metadata ->
-      if Candidate.reserved?(metadata),
+      if Metadata.reserved?(metadata),
         do: [metadata: "contains reserved fields"],
         else: []
     end)
     |> validate_change(:body, fn :body, body ->
       if String.trim(body) == "", do: [body: "can't be blank"], else: []
     end)
+    |> validate_structured_metadata(Keyword.get(opts, :structured, false))
     |> put_body_hash()
     |> unique_constraint([:owner_actor_id, :origin_identifier])
     |> check_constraint(:body, name: :memory_posts_body_non_blank)
     |> check_constraint(:body_hash, name: :memory_posts_body_hash_format)
   end
 
+  defp validate_structured_metadata(changeset, false), do: changeset
+
+  defp validate_structured_metadata(changeset, true) do
+    if Enum.all?(~w(title body metadata tags), &Map.has_key?(changeset.params, &1)) and
+         Metadata.changeset(%Metadata{}, get_field(changeset, :metadata)).valid? do
+      changeset
+    else
+      add_error(changeset, :metadata, "requires a complete structured memory payload")
+    end
+  end
+
   defp put_body_hash(changeset) do
     case fetch_change(changeset, :body) do
-      {:ok, body} -> put_change(changeset, :body_hash, body_hash(body))
-      :error -> changeset
+      {:ok, body} when is_binary(body) -> put_change(changeset, :body_hash, body_hash(body))
+      _ -> changeset
     end
   end
 

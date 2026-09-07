@@ -6,7 +6,7 @@ defmodule Memovee.Memory.Post.Manager do
   import Ecto.Query, only: [from: 2]
 
   alias Memovee.Accounts.Actor
-  alias Memovee.Memory.{Candidate, Post, Projection, Scope, Tag, Tagging}
+  alias Memovee.Memory.{Post, Projection, Scope, Tag, Tagging}
   alias Memovee.Projections
   alias Memovee.Repo
 
@@ -66,18 +66,20 @@ defmodule Memovee.Memory.Post.Manager do
   end
 
   defp persist(scope, origin, attrs) do
-    {post_attrs, tags} = unwrap(Candidate.validate(attrs, scope.service?))
-    authorize_references!(scope, post_attrs["metadata"])
-
-    post =
+    changeset =
       %Post{
         owner_actor_id: scope.owner.id,
         created_by_actor_id: scope.actor.id,
         origin_identifier: origin
       }
-      |> Post.changeset(post_attrs)
-      |> Repo.insert()
-      |> unwrap()
+      |> Post.changeset(attrs, structured: scope.service?)
+
+    if not changeset.valid?, do: Repo.rollback(changeset)
+
+    metadata = Ecto.Changeset.get_field(changeset, :metadata)
+    tags = unwrap(Tag.prepare(Map.get(attrs, "tags", []), metadata, scope.service?))
+    authorize_references!(scope, metadata)
+    post = changeset |> Repo.insert() |> unwrap()
 
     Enum.each(tags, &attach_tag(post, &1))
     unwrap(Projections.create_indexing(post))

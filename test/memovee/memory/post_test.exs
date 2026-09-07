@@ -30,4 +30,25 @@ defmodule Memovee.Memory.PostTest do
     changeset = Post.changeset(post, %{"body" => "source", "origin_identifier" => "forged"})
     assert Ecto.Changeset.get_field(changeset, :origin_identifier) == "trusted:source"
   end
+
+  test "UTF-8 byte limits preserve exact text" do
+    assert Post.changeset(%Post{}, %{"body" => String.duplicate("🙂", 8192)}).valid?
+
+    refute Post.changeset(%Post{}, %{"body" => String.duplicate("🙂", 8193)}).valid?
+
+    refute Post.changeset(%Post{}, %{"body" => String.duplicate("a", 32_769)}).valid?
+  end
+
+  test "reserved metadata keys are rejected at any nesting depth" do
+    for key <-
+          ~w(owner_actor_id actor_id created_by_actor_id current_state current_state_version origin_identifier) do
+      attrs = %{"body" => "source", "metadata" => %{"nested" => [%{key => "forged"}]}}
+      refute Post.changeset(%Post{}, attrs).valid?
+    end
+
+    assert Post.changeset(%Post{}, %{
+             "body" => "source",
+             "metadata" => %{"arbitrary" => [1, true, nil]}
+           }).valid?
+  end
 end

@@ -4,6 +4,7 @@ defmodule Memovee.Memory.Metadata do
 
   alias __MODULE__.Source
 
+  @reserved ~w(owner_actor_id actor_id created_by_actor_id current_state current_state_version origin_identifier)
   @primary_key false
   @fields [
     :kind,
@@ -48,6 +49,13 @@ defmodule Memovee.Memory.Metadata do
 
   def changeset(metadata, _attrs),
     do: metadata |> change() |> add_error(:base, "must be an object")
+
+  def reserved?(value) when is_map(value) do
+    Enum.any?(value, fn {key, child} -> to_string(key) in @reserved or reserved?(child) end)
+  end
+
+  def reserved?(value) when is_list(value), do: Enum.any?(value, &reserved?/1)
+  def reserved?(_), do: false
 
   defp validate_timestamp(field, value) do
     case DateTime.from_iso8601(value) do
