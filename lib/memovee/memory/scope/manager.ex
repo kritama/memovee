@@ -2,7 +2,7 @@ defmodule Memovee.Memory.Scope.Manager do
   @moduledoc false
   import Ecto.Query
   alias Memovee.Accounts.{Actor, Relationship}
-  alias Memovee.Memory.Scope
+  alias Memovee.Memory.{Context, Scope}
   alias Memovee.Repo
 
   def resolve_service(actor, attrs) do
@@ -17,7 +17,7 @@ defmodule Memovee.Memory.Scope.Manager do
 
     cond do
       Map.has_key?(attrs, "context") and not service? -> {:error, :forbidden_context}
-      service? and not valid_context?(context) -> {:error, :invalid_context}
+      service? -> resolve_context(token_id, context)
       true -> resolve_actor(token_id, service?, context)
     end
   end
@@ -37,13 +37,20 @@ defmodule Memovee.Memory.Scope.Manager do
     end
   end
 
+  defp resolve_context(token_id, attrs) do
+    case %Context{} |> Context.changeset(attrs) |> Ecto.Changeset.apply_action(:validate) do
+      {:ok, context} -> resolve_actor(token_id, true, context)
+      {:error, _changeset} -> {:error, :invalid_context}
+    end
+  end
+
   defp lock_principals(scope) do
     ids = Enum.uniq([scope.token_actor_id, scope.actor.id, scope.owner.id])
     Repo.all(from actor in Actor, where: actor.id in ^ids, order_by: actor.id, lock: "FOR SHARE")
   end
 
   defp resolve_actor(token_id, service?, context) do
-    actor_id = if service?, do: context["actor_id"], else: token_id
+    actor_id = if service?, do: context.actor_id, else: token_id
 
     with %Actor{current_state: "active"} <- Repo.get(Actor, token_id),
          {:ok, actor, owner} <- owner(actor_id) do
@@ -53,7 +60,7 @@ defmodule Memovee.Memory.Scope.Manager do
          owner: owner,
          token_actor_id: token_id,
          service?: service?,
-         origin_identifier: if(service?, do: context["origin_identifier"])
+         origin_identifier: if(service?, do: context.origin_identifier)
        }}
     else
       _ -> {:error, :forbidden}
@@ -83,13 +90,4 @@ defmodule Memovee.Memory.Scope.Manager do
         {:error, :forbidden}
     end
   end
-
-  defp valid_context?(%{"actor_id" => id, "origin_identifier" => origin} = context) do
-    map_size(context) == 2 and match?({:ok, _}, Ecto.UUID.cast(id)) and
-      is_binary(origin) and String.trim(origin) != "" and
-      not String.contains?(origin, <<0>>) and
-      length(String.codepoints(origin)) <= 512
-  end
-
-  defp valid_context?(_), do: false
 end
