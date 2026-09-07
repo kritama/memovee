@@ -48,6 +48,8 @@ defmodule Memovee.Projections.IndexingTest do
     {:ok, result} = Post.Manager.create(scope, %{"body" => "saved"})
     job = Repo.one!(Oban.Job)
     projection = Repo.get_by!(Indexing, post_id: result.post.id)
+    assert projection.indexing_version == 1
+    assert projection.revision == result.post.memory_revision
     assert job.args == %{"projection_id" => projection.id}
     assert job.worker == "Memovee.Projections.Indexing.Worker"
     assert job.queue == "memory_projection"

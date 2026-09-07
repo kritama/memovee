@@ -33,7 +33,7 @@ defmodule Memovee.Repo.Migrations.AddMemoryOwnershipAndProjections do
       add :post_id, references(:memory_posts, type: :binary_id, on_delete: :restrict), null: false
       add :revision, :integer, null: false
       add :fingerprint, :string, null: false
-      add :profile, :string, null: false, default: "memory-v1"
+      add :indexing_version, :integer, null: false, default: 1
       add :current_state, :string, null: false, default: "pending"
       add :current_state_version, :integer, null: false, default: 0
       add :lease_token, :uuid
@@ -44,7 +44,11 @@ defmodule Memovee.Repo.Migrations.AddMemoryOwnershipAndProjections do
       timestamps(type: :utc_datetime)
     end
 
-    create unique_index(:projections_indexings, [:post_id, :revision, :profile])
+    create unique_index(:projections_indexings, [:post_id, :revision, :indexing_version])
+
+    create constraint(:projections_indexings, :indexing_version_positive,
+             check: "indexing_version >= 1"
+           )
 
     create constraint(:projections_indexings, :projection_revision_positive,
              check: "revision >= 1"

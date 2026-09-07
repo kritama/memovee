@@ -10,7 +10,7 @@ defmodule Memovee.Projections.Indexing do
     belongs_to :post, Memovee.Memory.Post
     field :revision, :integer
     field :fingerprint, :string
-    field :profile, :string, default: "memory-v1"
+    field :indexing_version, :integer, default: 1
     field :current_state, :string, default: "pending"
     field :current_state_version, :integer, default: 0
     # Opaque fencing token for future graph callbacks, not a queue lease.
@@ -27,10 +27,11 @@ defmodule Memovee.Projections.Indexing do
   def changeset(indexing, attrs \\ %{}) do
     indexing
     |> cast(attrs, [])
-    |> validate_required([:owner_actor_id, :post_id, :revision, :fingerprint, :profile])
+    |> validate_required([:owner_actor_id, :post_id, :revision, :fingerprint, :indexing_version])
     |> foreign_key_constraint(:owner_actor_id)
     |> foreign_key_constraint(:post_id)
     |> check_constraint(:revision, name: :projection_revision_positive)
-    |> unique_constraint([:post_id, :revision, :profile])
+    |> check_constraint(:indexing_version, name: :indexing_version_positive)
+    |> unique_constraint([:post_id, :revision, :indexing_version])
   end
 end

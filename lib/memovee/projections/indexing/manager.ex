@@ -14,7 +14,7 @@ defmodule Memovee.Projections.Indexing.Manager do
     Repo.get_by!(Indexing,
       post_id: post.id,
       revision: post.memory_revision,
-      profile: "memory-v1"
+      indexing_version: 1
     )
   end
 
@@ -34,7 +34,7 @@ defmodule Memovee.Projections.Indexing.Manager do
       "title" => post.title,
       "body" => post.body,
       "metadata" => post.metadata,
-      "profile" => "memory-v1",
+      "indexing_version" => 1,
       "tags" =>
         Enum.map(
           tags,

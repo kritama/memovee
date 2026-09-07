@@ -182,6 +182,11 @@ revision/fingerprint, generated artifacts and durable readiness independently of
 Oban's job retention. Its existing `lease_token` field is reserved for fencing
 future asynchronous graph callbacks, not queue scheduling.
 
+`revision` identifies the Post content revision; `indexing_version` is the integer
+indexing method version, initially `1`. Indexing records are unique by
+`(post_id, revision, indexing_version)`, and the fingerprint and generation/search
+contracts include that version.
+
 The `memory_projection` queue has concurrency four and starts paused until #13
 implements execution. Jobs allow five attempts with retry delays of 1, 5, 30 and
 120 seconds. Tests use Oban's manual mode. The worker deliberately returns an
