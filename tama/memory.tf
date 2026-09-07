@@ -6,15 +6,15 @@ module "memory" {
   global_schemas              = { for name, class in module.global.schemas : name => class.id }
   context_metadata_corpus_id  = module.global.context_metadata_corpus_id
   action_call_json_corpus_id  = module.global.action_call_json_corpus_id
-  openai_api_key              = var.memory_openai_api_key
+  openrouter_api_key          = var.memory_openrouter_api_key
   memory_api_specification_id = var.memory_api_specification_id
   memory_api_source_slug      = var.memory_api_source_slug
   memory_api_operations       = var.memory_api_operations
 }
-variable "memory_openai_api_key" {
+variable "memory_openrouter_api_key" {
   type        = string
   sensitive   = true
-  description = "Operator OpenAI credential; supplied through TF_VAR_memory_openai_api_key."
+  description = "Operator OpenRouter credential; supplied through TF_VAR_memory_openrouter_api_key."
 }
 output "memory_interfaces" {
   value = module.memory.interfaces

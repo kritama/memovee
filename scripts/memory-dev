@@ -73,7 +73,7 @@ set +a
 export MIX_ENV=dev PORT=4000 DATABASE_HOST=127.0.0.1
 export DATABASE_PORT=${DATABASE_PORT:-5432}
 export MEMOVEE_MEMORY_REDIS_URL=${MEMOVEE_MEMORY_REDIS_URL:-redis://127.0.0.1:6380/0}
-export TF_VAR_memory_openai_api_key=${OPENAI_API_KEY:-${TF_VAR_memory_openai_api_key:-}}
+export TF_VAR_memory_openrouter_api_key=${OPENROUTER_API_KEY:-${TF_VAR_memory_openrouter_api_key:-}}
 export MEMORY_PROVIDER_HOST MEMORY_TAMA_HOST
 MEMORY_PROVIDER_HOST=$(jq -er '.mcpAppProvider.localHttps.providerHost' tama/.tama-kit.json)
 MEMORY_TAMA_HOST=$(jq -er '.mcpAppProvider.localHttps.tamaHost' tama/.tama-kit.json)
@@ -91,7 +91,7 @@ version=$(docker compose version --short)
 version=${version#v}
 [[ $(printf '2.20.0\n%s\n' "$version" | sort -V | head -1) == 2.20.0 ]] || fail 'Docker Compose >=2.20.0 is required'
 docker info --format '{{.ServerVersion}}'
-for key in MEMOVEE_MEMORY_TAMA_ACTOR_ID MEMOVEE_MEMORY_TAMA_API_CREDENTIAL OPENAI_API_KEY; do
+for key in MEMOVEE_MEMORY_TAMA_ACTOR_ID MEMOVEE_MEMORY_TAMA_API_CREDENTIAL OPENROUTER_API_KEY; do
   [[ -n ${!key:-} ]] || fail "Missing operator configuration: $key"
 done
 

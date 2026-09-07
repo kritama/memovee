@@ -55,15 +55,21 @@ the embeddings OpenAPI source. Tama #114–#116 remain runtime prerequisites.
 
 ## Local development
 
+Inference uses OpenRouter's `https://openrouter.ai/api/v1/chat/completions`
+endpoint with model `openai/gpt-4.1-mini`, following the existing `memovee-tama`
+integration. This is OpenRouter's model identifier, not the previous dated
+OpenAI snapshot pin. Record the actual served model/provider in live evaluations.
+See the [OpenRouter API guide](https://openrouter.ai/docs/quickstart).
+
 `scripts/memory-dev {start|stop|check|plan} [--dry-run]` is a shell wrapper for
 Docker Compose, Mix and Terraform. It uses Bash, jq and standard Linux utilities.
 `check` probes runtime readiness; it does not replace Terraform validation.
 
 Store `MEMOVEE_MEMORY_TAMA_ACTOR_ID`, `MEMOVEE_MEMORY_TAMA_API_CREDENTIAL` and
-`OPENAI_API_KEY` in ignored `tama/.memory.env`, mode 0600. The existing provisioner
+`OPENROUTER_API_KEY` in ignored `tama/.memory.env`, mode 0600. The existing provisioner
 credentials stay in `tama/.tama.env`; the provider environment path comes from the
 Tama Kit manifest. Source these local files only from a trusted checkout.
-For direct Terraform use, set `TF_VAR_memory_openai_api_key` from the OpenAI key
+For direct Terraform use, set `TF_VAR_memory_openrouter_api_key` from the OpenRouter key
 without printing it; the `plan` wrapper does this automatically.
 
 Memovee owns Redis alongside PostgreSQL in the root `compose.yaml`. Start it with

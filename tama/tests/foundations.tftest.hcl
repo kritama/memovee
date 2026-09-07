@@ -4,7 +4,7 @@ mock_provider "tama" {}
 run "staged_foundations" {
   command = plan
   variables {
-    memory_openai_api_key = "fixture-only-never-a-real-credential"
+    memory_openrouter_api_key = "fixture-only-never-a-real-credential"
   }
   assert {
     condition     = module.memory.interfaces.ready == false
@@ -32,7 +32,7 @@ run "unknown_operation_rejected" {
     global_schemas              = { forwarding = "fixture-forwarding" }
     context_metadata_corpus_id  = "fixture-context"
     action_call_json_corpus_id  = "fixture-action"
-    openai_api_key              = "fixture-only-never-a-real-credential"
+    openrouter_api_key          = "fixture-only-never-a-real-credential"
     memory_api_specification_id = "fixture-specification"
     memory_api_operations       = ["MemoveeWeb.Tama.Memory.PostController.create"]
   }
