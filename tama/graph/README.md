@@ -177,7 +177,7 @@ save caller, #13 owns indexing execution, and #14 owns search.
 Projection scheduling uses [Oban](https://oban.hexdocs.pm/Oban.html). Every new
 projection revision inserts an Oban job in the same database transaction. Oban
 owns queue execution, attempts, retry scheduling and orphaned-job recovery; there
-is no custom dispatcher or lease-renewal loop. `Memovee.Projections.Search` keeps
+is no custom dispatcher or lease-renewal loop. `Memovee.Projections.Indexing` keeps
 revision/fingerprint, generated artifacts and durable readiness independently of
 Oban's job retention. Its existing `lease_token` field is reserved for fencing
 future asynchronous graph callbacks, not queue scheduling.

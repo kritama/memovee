@@ -1,11 +1,11 @@
-defmodule Memovee.Projections.Search.Manager do
+defmodule Memovee.Projections.Indexing.Manager do
   @moduledoc "Persists pending indexing work. Worker execution belongs to the indexing integration."
   import Ecto.Query
   import Ecto.Changeset
   alias Ecto.Multi
   alias Memovee.Accounts.Actor
   alias Memovee.Memory.{Candidate, Post, Tag, Tagging}
-  alias Memovee.Projections.Search
+  alias Memovee.Projections.Indexing
   alias Memovee.Repo
   alias Memovee.Workers.MemoryProjection
 
@@ -33,7 +33,7 @@ defmodule Memovee.Projections.Search.Manager do
         )
     }
 
-    %Search{
+    %Indexing{
       owner_actor_id: post.owner_actor_id,
       post_id: post.id,
       revision: post.memory_revision,

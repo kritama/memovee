@@ -1,5 +1,5 @@
-defimpl Eventful.Transit, for: Memovee.Projections.Search do
-  alias Memovee.Projections.Search.Event
+defimpl Eventful.Transit, for: Memovee.Projections.Indexing do
+  alias Memovee.Projections.Indexing.Event
 
   def perform(projection, actor, event_name, options \\ []) do
     Event.handle(projection, actor, %{

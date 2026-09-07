@@ -2,7 +2,7 @@ defmodule Memovee.Memory.PostPersistenceTest do
   use Memovee.DataCase, async: false
   import Memovee.AccountsFixtures
   alias Memovee.Memory.{Post, Scope, Tag, Tagging}
-  alias Memovee.Projections.Search
+  alias Memovee.Projections.Indexing
 
   setup do
     owner = user_fixture().actor
@@ -29,7 +29,7 @@ defmodule Memovee.Memory.PostPersistenceTest do
     assert Repo.aggregate(Post, :count) == 1
     assert Repo.aggregate(Tag, :count) == 2
     assert Repo.aggregate(Tagging, :count) == 2
-    assert Repo.aggregate(Search, :count) == 1
+    assert Repo.aggregate(Indexing, :count) == 1
     assert {:ok, replay} = Post.Manager.create(scope, %{"body" => nil})
     assert replay.post == result.post
     assert replay.receipt == %{result.receipt | replayed: true}
@@ -42,7 +42,7 @@ defmodule Memovee.Memory.PostPersistenceTest do
 
     assert {:error, :invalid_tags} = Post.Manager.create(scope, attrs)
 
-    for schema <- [Post, Tag, Tagging, Search, Oban.Job],
+    for schema <- [Post, Tag, Tagging, Indexing, Oban.Job],
         do: assert(Repo.aggregate(schema, :count) == 0)
 
     assert {:ok, %{replayed: false}} = Post.Manager.create(scope, candidate())
@@ -121,7 +121,7 @@ defmodule Memovee.Memory.PostPersistenceTest do
     assert tag.description == "Original"
     assert {:ok, _} = Tag.Manager.update(tag, %{description: "Explicit edit"})
     assert Repo.get!(Post, first.post.id).memory_revision == 2
-    assert Repo.aggregate(Search, :count) == 4
+    assert Repo.aggregate(Indexing, :count) == 4
     assert {:ok, updated} = Post.Manager.update(agent, first.post, %{title: "New title"})
     assert updated.memory_revision == 3
     assert updated.owner_actor_id == scope.owner.id
@@ -133,8 +133,8 @@ defmodule Memovee.Memory.PostPersistenceTest do
       |> Jason.decode!()
       |> Map.fetch!("fingerprint")
 
-    assert Search.Manager.canonical_json(fixture["input"]) == fixture["canonical_json"]
-    assert Search.Manager.fingerprint(fixture["input"]) == fixture["sha256"]
+    assert Indexing.Manager.canonical_json(fixture["input"]) == fixture["canonical_json"]
+    assert Indexing.Manager.fingerprint(fixture["input"]) == fixture["sha256"]
   end
 
   test "replay receipts reflect current canonical data without overwriting edits", %{
@@ -210,7 +210,7 @@ defmodule Memovee.Memory.PostPersistenceTest do
     assert Repo.get!(Post, first.post.id).memory_revision == 3
     assert {:ok, updated} = Post.Manager.update(agent, first.post, %{body: "source"})
     assert updated.memory_revision == 3
-    assert Repo.aggregate(Search, :count) == 4
+    assert Repo.aggregate(Indexing, :count) == 4
   end
 
   defp candidate do

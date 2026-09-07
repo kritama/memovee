@@ -1,11 +1,11 @@
-defmodule Memovee.Projections.Search do
+defmodule Memovee.Projections.Indexing do
   @moduledoc "Durable memory indexing state and artifacts; Oban owns work scheduling and retries."
   use Memovee.Schema
   use Eventful.Transitable
   alias __MODULE__.{Event, Transitions}
   Transitions |> governs(:current_state, on: Event, lock: :current_state_version)
 
-  schema "projections_searches" do
+  schema "projections_indexings" do
     belongs_to :owner_actor, Memovee.Accounts.Actor
     belongs_to :post, Memovee.Memory.Post
     field :revision, :integer

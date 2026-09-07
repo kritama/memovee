@@ -24,7 +24,7 @@ defmodule Memovee.Repo.Migrations.AddMemoryOwnershipAndProjections do
     create unique_index(:memory_posts, [:owner_actor_id, :origin_identifier])
     create constraint(:memory_posts, :memory_revision_positive, check: "memory_revision >= 1")
 
-    create table(:projections_searches, primary_key: false) do
+    create table(:projections_indexings, primary_key: false) do
       add :id, :binary_id, primary_key: true
 
       add :owner_actor_id, references(:actors, type: :binary_id, on_delete: :restrict),
@@ -44,26 +44,26 @@ defmodule Memovee.Repo.Migrations.AddMemoryOwnershipAndProjections do
       timestamps(type: :utc_datetime)
     end
 
-    create unique_index(:projections_searches, [:post_id, :revision, :profile])
+    create unique_index(:projections_indexings, [:post_id, :revision, :profile])
 
-    create constraint(:projections_searches, :projection_revision_positive,
+    create constraint(:projections_indexings, :projection_revision_positive,
              check: "revision >= 1"
            )
 
-    create table(:projections_search_events, primary_key: false) do
+    create table(:projections_indexing_events, primary_key: false) do
       add :id, :binary_id, primary_key: true
       add :name, :string, null: false
       add :domain, :string, null: false
       add :metadata, :map, null: false, default: %{}
 
-      add :search_id,
-          references(:projections_searches, type: :binary_id, on_delete: :restrict), null: false
+      add :indexing_id,
+          references(:projections_indexings, type: :binary_id, on_delete: :restrict), null: false
 
       add :actor_id, references(:actors, type: :binary_id, on_delete: :restrict), null: false
       timestamps(type: :utc_datetime_usec)
     end
 
-    create index(:projections_search_events, [:search_id])
-    create index(:projections_search_events, [:actor_id])
+    create index(:projections_indexing_events, [:indexing_id])
+    create index(:projections_indexing_events, [:actor_id])
   end
 end
