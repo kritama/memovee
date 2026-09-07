@@ -5,6 +5,12 @@ defmodule Memovee.Memory.Scope.Manager do
   alias Memovee.Memory.Scope
   alias Memovee.Repo
 
+  def resolve_service(actor, attrs) do
+    with {:ok, scope} <- resolve(actor, attrs) do
+      if scope.service?, do: {:ok, scope}, else: {:error, :forbidden}
+    end
+  end
+
   def resolve(%Actor{id: token_id}, attrs) do
     service? = token_id == Application.get_env(:memovee, :memory_tama_actor_id)
     context = Map.get(attrs, "context")

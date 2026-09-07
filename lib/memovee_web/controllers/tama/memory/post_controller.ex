@@ -3,7 +3,6 @@ defmodule MemoveeWeb.Tama.Memory.PostController do
   use OpenApiSpex.ControllerSpecs
 
   alias Memovee.Memory.{Post, Scope}
-  alias MemoveeWeb.Tama.Memory.Error
 
   alias MemoveeWeb.Schemas.Tama.Memory.{
     CreatePostRequest,
@@ -32,8 +31,7 @@ defmodule MemoveeWeb.Tama.Memory.PostController do
     ]
 
   def create(conn, attrs) do
-    with {:ok, scope} <- Scope.resolve(conn.assigns.current_scope.actor, attrs),
-         :ok <- require_service(scope),
+    with {:ok, scope} <- Scope.resolve_service(conn.assigns.current_scope.actor, attrs),
          true <-
            Enum.all?(Map.keys(attrs), &(&1 in ~w(context post))),
          post_attrs when is_map(post_attrs) <- Map.get(attrs, "post"),
@@ -43,11 +41,8 @@ defmodule MemoveeWeb.Tama.Memory.PostController do
       |> put_status(if(result.replayed, do: 200, else: 201))
       |> render(:show, post: result.post, receipt: result.receipt)
     else
-      {:error, reason} -> Error.render(conn, reason)
-      _ -> Error.render(conn, :invalid_request)
+      {:error, reason} -> {:error, {:memory, reason}}
+      _ -> {:error, {:memory, :invalid_request}}
     end
   end
-
-  defp require_service(%Scope{service?: true}), do: :ok
-  defp require_service(_scope), do: {:error, :forbidden}
 end
