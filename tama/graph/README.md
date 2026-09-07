@@ -64,33 +64,37 @@ repair/failure behavior before any write; verify the runtime's output-format
 compatibility before enabling those chains.
 See the [OpenRouter API guide](https://openrouter.ai/docs/quickstart).
 
-`scripts/memory-dev {start|stop|check|plan} [--dry-run]` is a shell wrapper for
-Docker Compose, Mix and Terraform. It uses Bash, jq and standard Linux utilities.
-`check` probes runtime readiness; it does not replace Terraform validation.
+Manage local services directly with Docker Compose and Mix. Memovee owns
+PostgreSQL and Redis in the root `compose.yaml`:
 
-Store `MEMOVEE_MEMORY_TAMA_ACTOR_ID`, `MEMOVEE_MEMORY_TAMA_API_CREDENTIAL` and
-`OPENROUTER_API_KEY` in ignored `tama/.memory.env`, mode 0600. The existing provisioner
-credentials stay in `tama/.tama.env`; the provider environment path comes from the
-Tama Kit manifest. Source these local files only from a trusted checkout.
-For direct Terraform use, set `TF_VAR_memory_openrouter_api_key` from the OpenRouter key
-without printing it; the `plan` wrapper does this automatically.
+```sh
+docker compose up -d --wait postgres memory-redis
+mix ecto.migrate
+mix phx.server
+```
 
-Memovee owns Redis alongside PostgreSQL in the root `compose.yaml`. Start it with
-`docker compose up -d memory-redis`; no extra Compose file or profile is required.
-Redis 8.2.1 uses AOF, a named volume and loopback port 6380. Its development
-URL default applies only to this runner; production requires explicit configuration.
-The runner reuses the existing Compose project and Tama database. Phoenix runs
-on the host in development mode at port 4000; Tama remains a production release.
-`compose.host.yaml` only overrides Caddy routing for this host-run Phoenix setup.
-An already-running Caddy must be stopped explicitly before changing its routing
-from containerized Memovee to this host profile.
+Stop Phoenix with its terminal, and stop the dependencies without removing data:
 
-The runner starts services explicitly with `--no-deps --no-recreate`, records the
-container IDs and Phoenix PID/start identity it owns, and stops only those.
-Volumes are retained. Failed startup retains the ownership files for `stop`.
-Private logs, ownership files and saved plans live in ignored `tama/.memory/`.
-The `plan` command saves `.memory/memory.tfplan`; inspect it locally with Terraform
-before an authorized apply. Neither `start` nor `plan` applies graph changes.
+```sh
+docker compose stop postgres memory-redis
+```
+
+Use the existing bootstrapped Compose configuration to manage Tama and Caddy.
+The graph does not add lifecycle scripts or a proxy override. Redis uses AOF,
+the `memovee-memory-redis-data` volume and host URL
+`redis://127.0.0.1:6380/0`; configure the application's Redis connection when
+implementing indexing.
+
+Supply the OpenRouter key to Terraform through your local environment:
+
+```sh
+export TF_VAR_memory_openrouter_api_key="${OPENROUTER_API_KEY:?Set OPENROUTER_API_KEY}"
+terraform -chdir=tama plan -out=memory.tfplan
+```
+
+Use the existing Tama provisioner environment for provider authentication.
+Service Actor credentials, runtime feature/queue checks and live traces belong
+to the integration work that enables the graph consumers.
 
 Static/mock tests are not live acceptance. Service credentials, dependency image,
 loaded queues, real provider messages and root-message/result traces still need
