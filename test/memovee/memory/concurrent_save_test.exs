@@ -3,7 +3,8 @@ defmodule Memovee.Memory.ConcurrentSaveTest do
   import Ecto.Query
   alias Ecto.Adapters.SQL.Sandbox
   alias Memovee.Accounts.Actor
-  alias Memovee.Memory.{Ingestion, Post, ProjectionJob, Scope, Tag, Tagging}
+  alias Memovee.Memory.{Ingestion, Post, Scope, Tag, Tagging}
+  alias Memovee.Projections.Search
   alias Memovee.Repo
 
   test "twenty independent database transactions save one source exactly once" do
@@ -69,7 +70,7 @@ defmodule Memovee.Memory.ConcurrentSaveTest do
     assert Enum.count(receipts, &(not &1.replayed)) == 1
 
     Sandbox.unboxed_run(Repo, fn ->
-      projection = Repo.get_by!(ProjectionJob, post_id: hd(receipts).post_id)
+      projection = Repo.get_by!(Search, post_id: hd(receipts).post_id)
 
       assert Repo.aggregate(
                from(job in Oban.Job,
@@ -84,7 +85,7 @@ defmodule Memovee.Memory.ConcurrentSaveTest do
                1
 
       assert Repo.aggregate(
-               from(job in ProjectionJob, where: job.owner_actor_id == ^owner.id),
+               from(job in Search, where: job.owner_actor_id == ^owner.id),
                :count
              ) == 1
 
@@ -99,7 +100,7 @@ defmodule Memovee.Memory.ConcurrentSaveTest do
     posts = from post in Post, where: post.owner_actor_id == ^owner.id, select: post.id
 
     projection_ids =
-      Repo.all(from job in ProjectionJob, where: job.owner_actor_id == ^owner.id, select: job.id)
+      Repo.all(from job in Search, where: job.owner_actor_id == ^owner.id, select: job.id)
 
     Repo.delete_all(
       from job in Oban.Job, where: fragment("?->>'projection_id'", job.args) in ^projection_ids
@@ -107,7 +108,7 @@ defmodule Memovee.Memory.ConcurrentSaveTest do
 
     Repo.delete_all(from tagging in Tagging, where: tagging.post_id in subquery(posts))
     Repo.delete_all(from ingestion in Ingestion, where: ingestion.owner_actor_id == ^owner.id)
-    Repo.delete_all(from job in ProjectionJob, where: job.owner_actor_id == ^owner.id)
+    Repo.delete_all(from job in Search, where: job.owner_actor_id == ^owner.id)
     Repo.delete_all(from post in Post, where: post.owner_actor_id == ^owner.id)
     Repo.delete_all(from tag in Tag, where: tag.owner_actor_id == ^owner.id)
     Repo.delete_all(from actor in Actor, where: actor.id in ^[owner.id, service.id])

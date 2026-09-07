@@ -2,7 +2,8 @@ defmodule Memovee.Memory.Ingestion.Manager do
   @moduledoc "Serializes source submissions and atomic memory saves by owner and origin."
   import Ecto.Query
   alias Ecto.{Changeset, Multi}
-  alias Memovee.Memory.{Candidate, Ingestion, Post, ProjectionJob, Scope, Tag, Tagging}
+  alias Memovee.Memory.{Candidate, Ingestion, Post, Scope, Tag, Tagging}
+  alias Memovee.Projections.Search
   alias Memovee.Repo
 
   def open(%Scope{service?: true} = scope, content) when is_binary(content) do
@@ -143,7 +144,7 @@ defmodule Memovee.Memory.Ingestion.Manager do
       unwrap(%Tagging{} |> Tagging.changeset(post, tag) |> Repo.insert())
     end)
 
-    unwrap(ProjectionJob.Manager.create_pending(post))
+    unwrap(Search.Manager.create_pending(post))
     snapshot = %{"body_hash" => post.body_hash, "tag_ids" => tag_ids(post.id)}
 
     ingestion =
@@ -173,7 +174,7 @@ defmodule Memovee.Memory.Ingestion.Manager do
       )
 
     job =
-      Repo.get_by!(ProjectionJob,
+      Repo.get_by!(Search,
         post_id: post.id,
         revision: post.memory_revision,
         profile: "memory-v1"

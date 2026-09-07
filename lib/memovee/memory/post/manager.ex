@@ -6,7 +6,8 @@ defmodule Memovee.Memory.Post.Manager do
   import Ecto.Query, only: [from: 2]
 
   alias Memovee.Accounts.Actor
-  alias Memovee.Memory.{Post, Projection, ProjectionJob, Scope}
+  alias Memovee.Memory.{Post, Projection, Scope}
+  alias Memovee.Projections.Search
   alias Memovee.Repo
 
   def list(%Scope{} = scope) do
@@ -44,7 +45,7 @@ defmodule Memovee.Memory.Post.Manager do
       invalidate_sync(actor, current, updated)
 
       if Enum.any?([:title, :body, :metadata], &Map.has_key?(changeset.changes, &1)),
-        do: unwrap(ProjectionJob.Manager.bump(updated)),
+        do: unwrap(Search.Manager.bump(updated)),
         else: updated
     end)
   end

@@ -1,7 +1,8 @@
 defmodule Memovee.Memory.IngestionTest do
   use Memovee.DataCase, async: false
   import Memovee.AccountsFixtures
-  alias Memovee.Memory.{Candidate, Ingestion, Post, ProjectionJob, Scope, Tag, Tagging}
+  alias Memovee.Memory.{Candidate, Ingestion, Post, Scope, Tag, Tagging}
+  alias Memovee.Projections.Search
 
   setup do
     owner = user_fixture().actor
@@ -35,7 +36,7 @@ defmodule Memovee.Memory.IngestionTest do
     assert Repo.aggregate(Post, :count) == 1
     assert Repo.aggregate(Tag, :count) == 2
     assert Repo.aggregate(Tagging, :count) == 2
-    assert Repo.aggregate(ProjectionJob, :count) == 1
+    assert Repo.aggregate(Search, :count) == 1
 
     assert {:ok, replay} =
              Ingestion.Manager.save(scope, %{"ingestion_id" => opened.ingestion_id, "body" => nil})
@@ -56,7 +57,7 @@ defmodule Memovee.Memory.IngestionTest do
 
     assert {:error, :invalid_tags} = Ingestion.Manager.save(scope, attrs)
 
-    for schema <- [Post, Tag, Tagging, ProjectionJob],
+    for schema <- [Post, Tag, Tagging, Search],
         do: assert(Repo.aggregate(schema, :count) == 0)
 
     assert Repo.get!(Ingestion, opened.ingestion_id).post_id == nil
@@ -135,7 +136,7 @@ defmodule Memovee.Memory.IngestionTest do
     assert tag.description == "Original"
     assert {:ok, _} = Tag.Manager.update(tag, %{description: "Explicit edit"})
     assert Repo.get!(Post, first.post.id).memory_revision == 2
-    assert Repo.aggregate(ProjectionJob, :count) == 4
+    assert Repo.aggregate(Search, :count) == 4
     assert {:ok, updated} = Post.Manager.update(agent, first.post, %{title: "New title"})
     assert updated.memory_revision == 3
     assert updated.owner_actor_id == scope.owner.id
@@ -147,8 +148,8 @@ defmodule Memovee.Memory.IngestionTest do
       |> Jason.decode!()
       |> Map.fetch!("fingerprint")
 
-    assert ProjectionJob.Manager.canonical_json(fixture["input"]) == fixture["canonical_json"]
-    assert ProjectionJob.Manager.fingerprint(fixture["input"]) == fixture["sha256"]
+    assert Search.Manager.canonical_json(fixture["input"]) == fixture["canonical_json"]
+    assert Search.Manager.fingerprint(fixture["input"]) == fixture["sha256"]
   end
 
   test "saved receipts retain original hashes and tags after canonical edits", %{
@@ -230,7 +231,7 @@ defmodule Memovee.Memory.IngestionTest do
     assert Repo.get!(Post, first.post.id).memory_revision == 3
     assert {:ok, updated} = Post.Manager.update(agent, first.post, %{body: "source"})
     assert updated.memory_revision == 3
-    assert Repo.aggregate(ProjectionJob, :count) == 4
+    assert Repo.aggregate(Search, :count) == 4
   end
 
   defp candidate(id) do

@@ -1,7 +1,8 @@
 defmodule Memovee.Memory.Revision do
   @moduledoc false
   import Ecto.Query
-  alias Memovee.Memory.{Post, ProjectionJob}
+  alias Memovee.Memory.Post
+  alias Memovee.Projections.Search
   alias Memovee.Repo
 
   def lock_posts(ids) do
@@ -10,7 +11,7 @@ defmodule Memovee.Memory.Revision do
 
   def bump_posts(posts) do
     Enum.each(posts, fn post ->
-      case ProjectionJob.Manager.bump(post) do
+      case Search.Manager.bump(post) do
         {:ok, _} -> :ok
         {:error, error} -> Repo.rollback(error)
       end

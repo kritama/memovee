@@ -1,7 +1,8 @@
-defmodule Memovee.Memory.ProjectionJobTest do
+defmodule Memovee.Projections.SearchTest do
   use Memovee.DataCase, async: false
   import Memovee.AccountsFixtures
-  alias Memovee.Memory.{Ingestion, ProjectionJob, Scope}
+  alias Memovee.Memory.{Ingestion, Scope}
+  alias Memovee.Projections.Search
 
   test "job declarations require the configured active service and cannot claim readiness yet" do
     owner = user_fixture().actor
@@ -12,9 +13,9 @@ defmodule Memovee.Memory.ProjectionJobTest do
     on_exit(fn -> Application.put_env(:memovee, :memory_tama_actor_id, previous) end)
     {:ok, scope} = Scope.resolve(agent, %{})
     {:ok, result} = Ingestion.Manager.save(scope, %{"body" => "source"})
-    job = Repo.get_by!(ProjectionJob, post_id: result.post.id)
+    job = Repo.get_by!(Search, post_id: result.post.id)
 
-    assert Enum.sort(ProjectionJob.Transitions.valid_states()) ==
+    assert Enum.sort(Search.Transitions.valid_states()) ==
              ~w(failed obsolete pending processing ready)
 
     assert {:error, %Eventful.Error{code: :worker_not_implemented}} =
@@ -25,7 +26,7 @@ defmodule Memovee.Memory.ProjectionJobTest do
 
     assert {:ok, %{resource: obsolete}} = Eventful.Transit.perform(job, service, "invalidate", [])
     assert obsolete.current_state == "obsolete"
-    event = Repo.one!(ProjectionJob.Event)
+    event = Repo.one!(Search.Event)
     assert event.actor_id == service.id
     assert <<_::48, 7::4, _::76>> = Ecto.UUID.dump!(event.id)
   end
@@ -41,12 +42,12 @@ defmodule Memovee.Memory.ProjectionJobTest do
                Repo.rollback(:forced_rollback)
              end)
 
-    assert Repo.aggregate(ProjectionJob, :count) == 0
+    assert Repo.aggregate(Search, :count) == 0
     assert Repo.aggregate(Oban.Job, :count) == 0
 
     {:ok, result} = Ingestion.Manager.save(scope, %{"body" => "saved"})
     job = Repo.one!(Oban.Job)
-    projection = Repo.get_by!(ProjectionJob, post_id: result.post.id)
+    projection = Repo.get_by!(Search, post_id: result.post.id)
     assert job.args == %{"projection_id" => projection.id}
     assert job.worker == "Memovee.Workers.MemoryProjection"
     assert job.queue == "memory_projection"
@@ -54,6 +55,6 @@ defmodule Memovee.Memory.ProjectionJobTest do
     assert job.state == "available"
     assert {:ok, _} = Memovee.Memory.Post.Manager.update(agent, result.post, %{body: "revised"})
     assert Repo.aggregate(Oban.Job, :count) == 2
-    assert Repo.aggregate(ProjectionJob, :count) == 2
+    assert Repo.aggregate(Search, :count) == 2
   end
 end
