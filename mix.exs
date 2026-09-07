@@ -49,24 +49,40 @@ defmodule Memovee.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
-      {:bcrypt_elixir, "~> 3.0"},
+      # Web framework and server
       {:phoenix, "~> 1.8.12"},
+      {:phoenix_html, "~> 4.1"},
+      {:phoenix_live_view, "~> 1.2.0"},
+      {:bandit, "~> 1.5"},
+      {:gettext, "~> 1.0"},
+
+      # Database and resource lifecycle
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.14"},
+      {:postgrex, ">= 0.0.0"},
       {:eventful, "~> 3.3"},
+
+      # Background jobs, caching and clustering
       {:oban, "~> 2.24.1"},
-      {:hammer, "~> 7.0"},
       {:nebulex, "~> 3.0"},
       {:nebulex_local, "~> 3.0"},
+      {:dns_cluster, "~> 0.2.0"},
+
+      # Authentication and request protection
+      {:bcrypt_elixir, "~> 3.0"},
+      {:hammer, "~> 7.0"},
       {:remote_ip, "~> 1.2"},
       {:tama_oauth, "~> 0.4.1"},
-      {:postgrex, ">= 0.0.0"},
-      {:phoenix_html, "~> 4.1"},
-      {:phoenix_live_reload, "~> 1.2", only: :dev},
-      {:phoenix_live_view, "~> 1.2.0"},
-      {:lazy_html, ">= 0.1.0", only: :test},
-      {:phoenix_live_dashboard, "~> 0.8.3"},
+
+      # HTTP, JSON and API documentation
+      {:req, "~> 0.5"},
+      {:jason, "~> 1.2"},
       {:open_api_spex, "~> 3.22"},
+
+      # Email delivery
+      {:swoosh, "~> 1.16"},
+
+      # Frontend assets and components
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
       {:tailwind, "~> 0.5", runtime: Mix.env() == :dev},
       {:heroicons,
@@ -83,14 +99,14 @@ defmodule Memovee.MixProject do
        app: false,
        compile: false,
        depth: 1},
-      {:swoosh, "~> 1.16"},
-      {:req, "~> 0.5"},
+      # Monitoring and telemetry
+      {:phoenix_live_dashboard, "~> 0.8.3"},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
-      {:gettext, "~> 1.0"},
-      {:jason, "~> 1.2"},
-      {:dns_cluster, "~> 0.2.0"},
-      {:bandit, "~> 1.5"},
+
+      # Development, testing and code quality
+      {:phoenix_live_reload, "~> 1.2", only: :dev},
+      {:lazy_html, ">= 0.1.0", only: :test},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
