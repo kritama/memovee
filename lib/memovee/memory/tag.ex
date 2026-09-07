@@ -53,7 +53,8 @@ defmodule Memovee.Memory.Tag do
   end
 
   def prepare(values, metadata, graph?) when is_list(values) do
-    with true <- not graph? or Enum.all?(values, &graph_tag?/1),
+    with true <- length(values) <= 12,
+         true <- not graph? or Enum.all?(values, &graph_tag?/1),
          {:ok, normalized} <- normalize_tags(values),
          {:ok, normalized} <- kind_tag(normalized, metadata, graph?) do
       tags =
@@ -70,7 +71,11 @@ defmodule Memovee.Memory.Tag do
 
   def prepare(_, _, _), do: {:error, :invalid_tags}
 
-  defp graph_tag?(tag) when is_map(tag), do: Enum.sort(Map.keys(tag)) == ~w(key name namespace)
+  defp graph_tag?(%{"namespace" => namespace, "key" => key} = tag) when is_binary(key) do
+    Enum.sort(Map.keys(tag)) == ~w(key name namespace) and
+      namespace in ~w(kind project topic tool) and Regex.match?(@key_format, key)
+  end
+
   defp graph_tag?(_), do: false
 
   defp normalize_tags(values) do

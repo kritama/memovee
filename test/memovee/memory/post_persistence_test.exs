@@ -77,7 +77,7 @@ defmodule Memovee.Memory.PostPersistenceTest do
 
     assert result.receipt.tag_ids != other_result.receipt.tag_ids
     [other_tag] = Repo.all(from tag in Tag, where: tag.owner_actor_id == ^other_owner.id)
-    assert {:error, :owner_mismatch} = Tagging.Manager.create(result.post, other_tag)
+    assert {:error, :not_found} = Tagging.Manager.create(first, result.post, other_tag)
   end
 
   test "forged context and inactive owners or actors cannot access memory", %{
@@ -204,9 +204,9 @@ defmodule Memovee.Memory.PostPersistenceTest do
 
     [tag_id] = second.receipt.tag_ids
     tag = Repo.get!(Tag, tag_id)
-    assert {:ok, _} = Tagging.Manager.create(first.post, tag)
+    assert {:ok, _} = Tagging.Manager.create(scope, first.post, tag)
     assert Repo.get!(Post, first.post.id).memory_revision == 2
-    assert {1, nil} = Tagging.Manager.delete(first.post, tag)
+    assert {1, nil} = Tagging.Manager.delete(scope, first.post, tag)
     assert Repo.get!(Post, first.post.id).memory_revision == 3
     assert {:ok, updated} = Post.Manager.update(agent, first.post, %{body: "source"})
     assert updated.memory_revision == 3

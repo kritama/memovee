@@ -23,8 +23,8 @@ defmodule Memovee.Memory do
   defdelegate change_tag(tag, attrs \\ %{}), to: Tag.Manager, as: :change
   defdelegate list_post_tags(post), to: Tag.Manager, as: :list_for_post
 
-  defdelegate tag_post(post, tag), to: Tagging.Manager, as: :create
-  defdelegate untag_post(post, tag), to: Tagging.Manager, as: :delete
+  defdelegate tag_post(scope, post, tag), to: Tagging.Manager, as: :create
+  defdelegate untag_post(scope, post, tag), to: Tagging.Manager, as: :delete
 
   defdelegate list_post_projections(post), to: Projection.Manager, as: :list_for_post
   defdelegate list_pending_projections(), to: Projection.Manager, as: :list_pending

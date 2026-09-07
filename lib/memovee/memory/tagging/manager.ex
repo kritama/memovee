@@ -1,12 +1,12 @@
 defmodule Memovee.Memory.Tagging.Manager do
   @moduledoc "Maintains owner-consistent tag assignments and indexing revisions atomically."
   import Ecto.Query
-  alias Memovee.Memory.{Post, Revision, Tag, Tagging}
+  alias Memovee.Memory.{Post, Revision, Scope, Tag, Tagging}
   alias Memovee.Repo
 
-  def create(%Post{} = post, %Tag{} = tag) do
+  def create(%Scope{} = scope, %Post{} = post, %Tag{} = tag) do
     Repo.transaction(fn ->
-      {post, tag} = lock_records(post, tag)
+      {post, tag} = lock_records(scope, post, tag)
 
       tagging =
         case %Tagging{} |> Tagging.changeset(post, tag) |> Repo.insert() do
@@ -19,9 +19,9 @@ defmodule Memovee.Memory.Tagging.Manager do
     end)
   end
 
-  def delete(%Post{} = post, %Tag{} = tag) do
+  def delete(%Scope{} = scope, %Post{} = post, %Tag{} = tag) do
     Repo.transaction(fn ->
-      {post, tag} = lock_records(post, tag)
+      {post, tag} = lock_records(scope, post, tag)
 
       {count, _} =
         Repo.delete_all(
@@ -38,10 +38,27 @@ defmodule Memovee.Memory.Tagging.Manager do
     end
   end
 
-  defp lock_records(post, tag) do
-    tag = Repo.one!(from row in Tag, where: row.id == ^tag.id, lock: "FOR UPDATE")
-    [post] = Revision.lock_posts([post.id])
-    if post.owner_actor_id != tag.owner_actor_id, do: Repo.rollback(:owner_mismatch)
+  defp lock_records(scope, post, tag) do
+    scope =
+      case Scope.refresh(scope) do
+        {:ok, refreshed} -> refreshed
+        {:error, reason} -> Repo.rollback(reason)
+      end
+
+    tag =
+      Repo.one(
+        from row in Tag,
+          where: row.id == ^tag.id and row.owner_actor_id == ^scope.owner.id,
+          lock: "FOR UPDATE"
+      ) || Repo.rollback(:not_found)
+
+    post =
+      Repo.one(
+        from row in Post,
+          where: row.id == ^post.id and row.owner_actor_id == ^scope.owner.id,
+          lock: "FOR UPDATE"
+      ) || Repo.rollback(:not_found)
+
     {post, tag}
   end
 end

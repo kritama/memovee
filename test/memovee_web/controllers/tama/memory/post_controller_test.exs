@@ -422,4 +422,37 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
     assert conn.status == 200
     assert_operation_response(conn, "memory_post_create")
   end
+
+  test "service tag inputs must be canonical and at most twelve before deduplication", %{
+    credential: credential,
+    context: context
+  } do
+    tag = %{"namespace" => "topic", "key" => "elixir", "name" => "Elixir"}
+
+    for tags <- [
+          List.duplicate(tag, 13),
+          [Map.put(tag, "namespace", " Topic ")],
+          [Map.put(tag, "key", "ELIXIR")],
+          [Map.put(tag, "key", " elixir ")]
+        ] do
+      conn =
+        request(credential, "/tama/memory/posts", %{
+          context: context,
+          post: Map.put(memory_post(), "tags", tags)
+        })
+
+      assert json_response(conn, 422)["error"]["code"] == "invalid_request"
+      assert Repo.aggregate(Post, :count) == 0
+      assert Repo.aggregate(Oban.Job, :count) == 0
+    end
+
+    conn =
+      request(credential, "/tama/memory/posts", %{
+        context: context,
+        post: Map.put(memory_post(), "tags", [tag])
+      })
+
+    assert conn.status == 201
+    assert_operation_response(conn, "memory_post_create")
+  end
 end
