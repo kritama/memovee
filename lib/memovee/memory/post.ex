@@ -30,12 +30,9 @@ defmodule Memovee.Memory.Post do
     |> cast(attrs, [:title, :body, :metadata], empty_values: [])
     |> validate_required([:body, :metadata])
     |> validate_length(:title, min: 1, max: 255, count: :codepoints)
+    |> validate_length(:body, max: 32_768, count: :codepoints)
     |> validate_change(:body, fn :body, body ->
-      cond do
-        not String.valid?(body) -> [body: "must be valid UTF-8"]
-        byte_size(body) > 32_768 -> [body: "exceeds 32768 UTF-8 bytes"]
-        true -> []
-      end
+      if String.valid?(body), do: [], else: [body: "must be valid UTF-8"]
     end)
     |> validate_format(:title, ~r/^[^\x00]*$/, message: "must not contain NUL characters")
     |> validate_format(:body, ~r/^[^\x00]*$/, message: "must not contain NUL characters")

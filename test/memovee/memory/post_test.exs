@@ -31,10 +31,10 @@ defmodule Memovee.Memory.PostTest do
     assert Ecto.Changeset.get_field(changeset, :origin_identifier) == "trusted:source"
   end
 
-  test "UTF-8 byte limits preserve exact text" do
-    assert Post.changeset(%Post{}, %{"body" => String.duplicate("🙂", 8192)}).valid?
+  test "body limits count Unicode code points" do
+    assert Post.changeset(%Post{}, %{"body" => String.duplicate("🙂", 32_768)}).valid?
 
-    refute Post.changeset(%Post{}, %{"body" => String.duplicate("🙂", 8193)}).valid?
+    refute Post.changeset(%Post{}, %{"body" => String.duplicate("🙂", 32_769)}).valid?
 
     refute Post.changeset(%Post{}, %{"body" => String.duplicate("a", 32_769)}).valid?
   end

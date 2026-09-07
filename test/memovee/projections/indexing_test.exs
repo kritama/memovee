@@ -24,6 +24,14 @@ defmodule Memovee.Projections.IndexingTest do
     assert {:error, %Eventful.Error{code: :forbidden}} =
              Eventful.Transit.perform(job, agent, "invalidate", [])
 
+    assert {:error, %Eventful.Error{code: :revision, message: :current_revision}} =
+             Eventful.Transit.perform(job, service, "invalidate", [])
+
+    assert Repo.reload!(job).current_state == "pending"
+    assert Repo.aggregate(Indexing.Event, :count) == 0
+
+    assert {:ok, _} = Post.Manager.update(agent, result.post, %{body: "revised"})
+
     assert {:ok, %{resource: obsolete}} = Eventful.Transit.perform(job, service, "invalidate", [])
     assert obsolete.current_state == "obsolete"
     event = Repo.one!(Indexing.Event)

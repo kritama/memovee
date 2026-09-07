@@ -90,6 +90,7 @@ defmodule Memovee.Projections.Indexing.Manager do
              where: actor.id == ^actor_id and actor.current_state == "active"
          ) do
       Ecto.Multi.new()
+      |> Ecto.Multi.run(:revision, fn repo, _ -> superseded_revision(repo, changeset.data) end)
       |> Ecto.Multi.insert(:event, event_changeset)
       |> Ecto.Multi.update(:resource, changeset, stale_error_field: :current_state)
       |> Repo.transaction()
@@ -103,6 +104,19 @@ defmodule Memovee.Projections.Indexing.Manager do
     else
       {:error, %Eventful.Error{code: :forbidden}}
     end
+  end
+
+  defp superseded_revision(repo, projection) do
+    post =
+      repo.one!(
+        from post in Post,
+          where: post.id == ^projection.post_id,
+          lock: "FOR UPDATE"
+      )
+
+    if projection.revision < post.memory_revision,
+      do: {:ok, post.memory_revision},
+      else: {:error, :current_revision}
   end
 
   defp order_keys(value) when is_map(value) do

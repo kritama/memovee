@@ -377,4 +377,49 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
     refute Regex.match?(pattern, "has spaces")
     refute Regex.match?(pattern, "slash/key")
   end
+
+  test "multibyte bodies follow the published character limit", %{
+    credential: credential,
+    context: context
+  } do
+    for {body, index} <-
+          Enum.with_index([String.duplicate("😀", 8193), String.duplicate("😀", 32_768)]) do
+      attrs = %{
+        "context" => Map.put(context, "origin_identifier", "unicode-#{index}"),
+        "post" => Map.put(memory_post(), "body", body)
+      }
+
+      assert_request_schema(attrs, "CreateMemoryPostRequest", ApiSpec.spec())
+      conn = request(credential, "/tama/memory/posts", attrs)
+      assert conn.status == 201
+      assert_operation_response(conn, "memory_post_create")
+    end
+
+    conn =
+      request(credential, "/tama/memory/posts", %{
+        context: context,
+        post: Map.put(memory_post(), "body", String.duplicate("😀", 32_769))
+      })
+
+    assert json_response(conn, 422)["error"]["code"] == "invalid_request"
+  end
+
+  test "replays retain a valid receipt when current indexing invalidation is rejected", %{
+    credential: credential,
+    context: context
+  } do
+    attrs = %{context: context, post: memory_post()}
+    assert request(credential, "/tama/memory/posts", attrs).status == 201
+    projection = Repo.one!(Memovee.Projections.Indexing)
+
+    service =
+      Repo.get!(Memovee.Accounts.Actor, Application.fetch_env!(:memovee, :memory_tama_actor_id))
+
+    assert {:error, %Eventful.Error{code: :revision, message: :current_revision}} =
+             Eventful.Transit.perform(projection, service, "invalidate", [])
+
+    conn = request(credential, "/tama/memory/posts", attrs)
+    assert conn.status == 200
+    assert_operation_response(conn, "memory_post_create")
+  end
 end

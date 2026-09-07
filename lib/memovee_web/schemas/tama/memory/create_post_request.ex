@@ -28,7 +28,7 @@ defmodule MemoveeWeb.Schemas.Tama.Memory.CreatePostRequest do
             minLength: 1,
             maxLength: 32_768,
             pattern: ~r/^[^\x00]*$/,
-            description: "At most 32768 UTF-8 bytes"
+            description: "At most 32768 Unicode code points"
           },
           metadata: MemoryMetadata,
           tags: %Schema{
