@@ -7,7 +7,6 @@ defmodule Memovee.Memory.Projection.Manager do
   import Ecto.Query
 
   alias Ecto.Multi
-  alias Memovee.Accounts.Actor
   alias Memovee.Memory.{Post, Projection, Scope}
   alias Memovee.Repo
 
@@ -40,18 +39,8 @@ defmodule Memovee.Memory.Projection.Manager do
   end
 
   def get(%Scope{} = scope, id) do
-    with {:ok, id} <- Ecto.UUID.cast(id), {:ok, scope} <- Scope.refresh(scope) do
-      case Repo.one(
-             from projection in Projection,
-               join: post in Post,
-               on: post.id == projection.post_id,
-               where: projection.id == ^id and post.owner_actor_id == ^scope.owner.id
-           ) do
-        nil -> {:error, :not_found}
-        projection -> {:ok, projection}
-      end
-    else
-      :error -> {:error, :invalid_id}
+    case scoped_projection(scope, id) do
+      {:ok, _scope, projection} -> {:ok, projection}
       error -> error
     end
   end
@@ -76,31 +65,39 @@ defmodule Memovee.Memory.Projection.Manager do
     Projection.changeset(projection, attrs)
   end
 
-  def sync(%Actor{} = actor, %Projection{} = projection) do
-    Eventful.Transit.perform(projection, actor, "sync")
+  def sync(%Scope{} = scope, %Projection{} = projection) do
+    perform_transition(scope, projection, "sync")
   end
 
-  def complete(%Actor{} = actor, %Projection{} = projection, tama_entity_id, body_hash) do
-    Eventful.Transit.perform(projection, actor, "complete",
+  def complete(%Scope{} = scope, %Projection{} = projection, tama_entity_id, body_hash) do
+    perform_transition(scope, projection, "complete",
       parameters: %{tama_entity_id: tama_entity_id, body_hash: body_hash}
     )
   end
 
-  def fail(%Actor{} = actor, %Projection{} = projection, reason) when is_atom(reason) do
-    Eventful.Transit.perform(projection, actor, "fail",
-      parameters: %{reason: Atom.to_string(reason)}
-    )
+  def fail(%Scope{} = scope, %Projection{} = projection, reason) when is_atom(reason) do
+    perform_transition(scope, projection, "fail", parameters: %{reason: Atom.to_string(reason)})
   end
 
-  def retry(%Actor{} = actor, %Projection{} = projection) do
-    Eventful.Transit.perform(projection, actor, "retry")
+  def retry(%Scope{} = scope, %Projection{} = projection) do
+    perform_transition(scope, projection, "retry")
   end
 
-  def invalidate(%Actor{} = actor, %Projection{} = projection) do
-    Eventful.Transit.perform(projection, actor, "invalidate")
+  def invalidate(%Scope{} = scope, %Projection{} = projection) do
+    perform_transition(scope, projection, "invalidate")
   end
 
-  def invalidate_for_post(%Actor{} = actor, %Post{} = post) do
+  def invalidate_for_post(%Scope{} = scope, %Post{} = post) do
+    with {:ok, scope} <- Scope.refresh(scope),
+         %Post{} = post <- Repo.get_by(Post, id: post.id, owner_actor_id: scope.owner.id) do
+      invalidate_projections(scope, post)
+    else
+      nil -> {:error, :not_found}
+      error -> error
+    end
+  end
+
+  defp invalidate_projections(scope, post) do
     Projection
     |> where(
       [projection],
@@ -109,11 +106,34 @@ defmodule Memovee.Memory.Projection.Manager do
     |> order_by([projection], asc: projection.id)
     |> Repo.all()
     |> Enum.reduce_while({:ok, []}, fn projection, {:ok, transitions} ->
-      case invalidate(actor, projection) do
+      case invalidate(scope, projection) do
         {:ok, transition} -> {:cont, {:ok, [transition | transitions]}}
         {:error, error} -> {:halt, {:error, error}}
       end
     end)
+  end
+
+  defp perform_transition(%Scope{} = scope, %Projection{} = projection, event, opts \\ []) do
+    with {:ok, scope, projection} <- scoped_projection(scope, projection.id) do
+      Eventful.Transit.perform(projection, scope.actor, event, opts)
+    end
+  end
+
+  defp scoped_projection(scope, id) do
+    with {:ok, id} <- Ecto.UUID.cast(id), {:ok, scope} <- Scope.refresh(scope) do
+      case Repo.one(
+             from projection in Projection,
+               join: post in Post,
+               on: post.id == projection.post_id,
+               where: projection.id == ^id and post.owner_actor_id == ^scope.owner.id
+           ) do
+        nil -> {:error, :not_found}
+        projection -> {:ok, scope, projection}
+      end
+    else
+      :error -> {:error, :invalid_id}
+      error -> error
+    end
   end
 
   def complete_transition({projection_changeset, event_changeset}) do

@@ -48,6 +48,19 @@ defmodule Memovee.Memory.Post.ManagerTest do
     assert {:ok, %{replayed: false}} = Post.Manager.create(scope, candidate())
   end
 
+  test "atom-keyed post attributes preserve atom-keyed tags", %{agent: agent} do
+    {:ok, scope} = Scope.resolve(agent, %{})
+
+    assert {:ok, result} =
+             Post.Manager.create(scope, %{
+               body: "Atom keyed",
+               tags: [%{namespace: "topic", key: "elixir", name: "Elixir"}]
+             })
+
+    assert [tag_id] = result.receipt.tag_ids
+    assert %Tag{namespace: "topic", key: "elixir", name: "Elixir"} = Repo.get!(Tag, tag_id)
+  end
+
   test "two agents share an owner but another owner cannot hydrate a post", %{
     owner: owner,
     agent: agent

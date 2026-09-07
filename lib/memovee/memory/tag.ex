@@ -104,6 +104,16 @@ defmodule Memovee.Memory.Tag do
     end
   end
 
+  defp normalize_tag(tag) when is_map(tag) do
+    if Enum.all?(Map.keys(tag), &(&1 in [:namespace, :key, :name, :description, :metadata])) do
+      tag
+      |> Map.new(fn {key, value} -> {Atom.to_string(key), value} end)
+      |> normalize_tag()
+    else
+      {:error, :invalid_tags}
+    end
+  end
+
   defp normalize_tag(_), do: {:error, :invalid_tags}
 
   defp generated_key(name) do

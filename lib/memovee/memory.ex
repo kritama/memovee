@@ -31,13 +31,13 @@ defmodule Memovee.Memory do
   defdelegate get_projection(scope, id), to: Projection.Manager, as: :get
   defdelegate create_projection(scope, post, attrs), to: Projection.Manager, as: :create
   defdelegate change_projection(projection, attrs \\ %{}), to: Projection.Manager, as: :change
-  defdelegate start_projection_sync(actor, projection), to: Projection.Manager, as: :sync
+  defdelegate start_projection_sync(scope, projection), to: Projection.Manager, as: :sync
 
-  defdelegate complete_projection_sync(actor, projection, tama_entity_id, body_hash),
+  defdelegate complete_projection_sync(scope, projection, tama_entity_id, body_hash),
     to: Projection.Manager,
     as: :complete
 
-  defdelegate fail_projection_sync(actor, projection, reason), to: Projection.Manager, as: :fail
-  defdelegate retry_projection_sync(actor, projection), to: Projection.Manager, as: :retry
-  defdelegate invalidate_projection(actor, projection), to: Projection.Manager, as: :invalidate
+  defdelegate fail_projection_sync(scope, projection, reason), to: Projection.Manager, as: :fail
+  defdelegate retry_projection_sync(scope, projection), to: Projection.Manager, as: :retry
+  defdelegate invalidate_projection(scope, projection), to: Projection.Manager, as: :invalidate
 end

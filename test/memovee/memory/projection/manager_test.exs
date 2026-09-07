@@ -47,6 +47,7 @@ defmodule Memovee.Memory.Projection.ManagerTest do
   test "direct Eventful transitions enforce persisted ownership and active actors", %{
     owner: owner,
     agent: agent,
+    scope: scope,
     projection: projection
   } do
     other = user_fixture().actor
@@ -58,23 +59,52 @@ defmodule Memovee.Memory.Projection.ManagerTest do
     assert Repo.aggregate(Projection.Event, :count) == 0
     assert {:ok, _} = Eventful.Transit.perform(agent, owner, "deactivate")
 
-    assert {:error, %Eventful.Error{code: :authorization}} =
-             Memory.start_projection_sync(agent, projection)
+    assert {:error, :forbidden} = Memory.start_projection_sync(scope, projection)
 
     assert Repo.reload!(projection).current_state == "pending"
   end
 
+  test "projection lifecycle mutations are owner scoped", %{projection: projection} do
+    {:ok, other_scope} = Scope.resolve(user_fixture().actor, %{})
+    forged = %Projection{id: projection.id}
+
+    assert {:error, :not_found} = Memory.start_projection_sync(other_scope, forged)
+
+    assert {:error, :not_found} =
+             Memory.complete_projection_sync(
+               other_scope,
+               forged,
+               Ecto.UUID.generate(version: 7),
+               String.duplicate("a", 64)
+             )
+
+    assert {:error, :not_found} = Memory.fail_projection_sync(other_scope, forged, :failed)
+    assert {:error, :not_found} = Memory.retry_projection_sync(other_scope, forged)
+    assert {:error, :not_found} = Memory.invalidate_projection(other_scope, forged)
+    assert Repo.aggregate(Projection.Event, :count) == 0
+    assert Repo.reload!(projection).current_state == "pending"
+  end
+
+  test "completion rejects invalid parameters", %{scope: scope, projection: projection} do
+    assert {:ok, %{resource: syncing}} = Memory.start_projection_sync(scope, projection)
+
+    assert {:error,
+            %Eventful.Error{
+              code: :invalid_transition_parameters,
+              message: :invalid_tama_entity_id
+            }} = Memory.complete_projection_sync(scope, syncing, "invalid", "invalid")
+  end
+
   test "authorized lifecycle verifies body hash and invalidates on post edit", %{
-    agent: agent,
     projection: projection,
     post: post,
     scope: scope
   } do
-    assert {:ok, %{resource: syncing}} = Memory.start_projection_sync(agent, projection)
+    assert {:ok, %{resource: syncing}} = Memory.start_projection_sync(scope, projection)
 
     assert {:error, %Eventful.Error{code: :stale_body}} =
              Memory.complete_projection_sync(
-               agent,
+               scope,
                syncing,
                Ecto.UUID.generate(version: 7),
                String.duplicate("a", 64)
@@ -82,7 +112,7 @@ defmodule Memovee.Memory.Projection.ManagerTest do
 
     assert {:ok, %{resource: synced}} =
              Memory.complete_projection_sync(
-               agent,
+               scope,
                syncing,
                Ecto.UUID.generate(version: 7),
                post.body_hash

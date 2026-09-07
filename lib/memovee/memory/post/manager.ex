@@ -76,7 +76,7 @@ defmodule Memovee.Memory.Post.Manager do
     if not changeset.valid?, do: Repo.rollback(changeset)
 
     metadata = Ecto.Changeset.get_field(changeset, :metadata)
-    tags = unwrap(Tag.prepare(Map.get(attrs, "tags", []), metadata, scope.service?))
+    tags = unwrap(Tag.prepare(fetch_tags(attrs), metadata, scope.service?))
     if scope.service?, do: authorize_references!(scope.owner.id, metadata)
     post = changeset |> Repo.insert() |> unwrap()
 
@@ -162,7 +162,7 @@ defmodule Memovee.Memory.Post.Manager do
       end
 
       updated = unwrap(Repo.update(changeset))
-      invalidate_sync(scope.actor, current, updated)
+      invalidate_sync(scope, current, updated)
 
       if Enum.any?([:title, :body, :metadata], &Map.has_key?(changeset.changes, &1)),
         do: unwrap(Projections.bump_indexing_revision(scope, updated)),
@@ -170,10 +170,12 @@ defmodule Memovee.Memory.Post.Manager do
     end)
   end
 
-  defp invalidate_sync(actor, current, updated) do
+  defp invalidate_sync(scope, current, updated) do
     if updated.body_hash != current.body_hash,
-      do: unwrap(Projection.Manager.invalidate_for_post(actor, updated))
+      do: unwrap(Projection.Manager.invalidate_for_post(scope, updated))
   end
+
+  defp fetch_tags(attrs), do: Map.get(attrs, "tags", Map.get(attrs, :tags, []))
 
   defp unwrap(:ok), do: :ok
   defp unwrap({:ok, value}), do: value
