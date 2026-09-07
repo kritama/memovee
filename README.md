@@ -2,43 +2,42 @@
 
 ## Development
 
-Memovee runs Elixir and Phoenix on the host and uses Docker Compose with OrbStack for PostgreSQL. The committed `.envrc` points Ecto to `postgres.kritama-memovee.orb.local`, so PostgreSQL does not need to publish or occupy a host port.
+Tama is required for development. The root `compose.yml` runs Memovee,
+PostgreSQL and Redis, and includes Tama's generated Compose configuration for
+Tama, its database and Caddy. Memovee runs in development mode with source mounts
+and code reload; Tama uses its production release image.
 
-1. Allow direnv to load the development environment:
+Prepare the local Tama environment and certificates using the
+[local setup instructions](tama/README.md) before starting a fresh checkout.
+For an already bootstrapped checkout, start the full stack from the project root:
 
-   ```sh
-   direnv allow
-   ```
+```sh
+docker compose up -d --build
+docker compose ps
+```
 
-2. Start PostgreSQL and wait for it to become healthy:
+Open Memovee at [https://app.localhost](https://app.localhost) and Tama at
+[https://tama.app.localhost](https://tama.app.localhost).
 
-   ```sh
-   docker compose up -d --wait postgres
-   ```
+The Memovee container installs dependencies, prepares its development database
+and starts Phoenix. Run application commands inside it:
 
-3. Install dependencies and prepare the development database:
+```sh
+docker compose exec memovee mix ecto.migrate
+docker compose logs -f memovee
+```
 
-   ```sh
-   mix setup
-   ```
-
-4. Start the Phoenix endpoint:
-
-   ```sh
-   mix phx.server
-   ```
-
-   To run the endpoint inside IEx instead, use `iex -S mix phx.server`.
-
-Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
+Memovee owns the `memory-redis` service. Other containers can reach it at
+`redis://memory-redis:6379/0`; the host endpoint is
+`redis://127.0.0.1:6380/0`. Redis persists data with AOF in the
+`memovee-memory-redis-data` volume.
 
 ## Tests
 
-Tests use a separate `memovee_test` database on the same PostgreSQL service:
+Run tests against the separate test database:
 
 ```sh
-docker compose up -d --wait postgres
-mix test
+docker compose exec memovee mix test
 ```
 
 ## OAuth authorization server
@@ -101,7 +100,7 @@ forwarding headers and uses the direct socket peer address.
 
 ## Database Lifecycle
 
-Stop PostgreSQL without removing its data:
+Stop the development services without removing their data:
 
 ```sh
 docker compose stop
@@ -113,7 +112,8 @@ Remove the containers and network while preserving database data:
 docker compose down
 ```
 
-To also delete all local development and test databases, run `docker compose down -v`.
+To also delete all local development and test databases and memory Redis data,
+run `docker compose down -v`.
 
 Ready to run in production? Please [check our deployment guides](https://phoenix.hexdocs.pm/deployment.html).
 

@@ -7,70 +7,97 @@ defmodule Memovee.Memory.Projection.Manager do
   import Ecto.Query
 
   alias Ecto.Multi
-  alias Memovee.Accounts.Actor
-  alias Memovee.Memory.{Post, Projection}
+  alias Memovee.Memory.{Post, Projection, Scope}
   alias Memovee.Repo
 
-  def list_for_post(%Post{} = post) do
-    Projection
-    |> where([projection], projection.post_id == ^post.id)
-    |> order_by([projection], desc: projection.id)
-    |> Repo.all()
+  def list_for_post(%Scope{} = scope, %Post{} = post) do
+    with {:ok, post} <- Post.Manager.get(scope, post.id) do
+      {:ok,
+       Repo.all(
+         from projection in Projection,
+           where: projection.post_id == ^post.id,
+           order_by: [desc: projection.id]
+       )}
+    end
   end
 
-  def list_pending do
-    Projection
-    |> join(:inner, [projection], post in Post, on: post.id == projection.post_id)
-    |> where(
-      [projection, post],
-      projection.current_state == "pending" or
-        (projection.current_state == "synced" and
-           fragment("? IS DISTINCT FROM ?", projection.synced_body_hash, post.body_hash))
-    )
-    |> order_by([projection], asc: projection.id)
-    |> Repo.all()
+  def list_pending(%Scope{} = scope) do
+    with {:ok, scope} <- Scope.refresh(scope) do
+      {:ok,
+       Repo.all(
+         from projection in Projection,
+           join: post in Post,
+           on: post.id == projection.post_id,
+           where:
+             post.owner_actor_id == ^scope.owner.id and
+               (projection.current_state == "pending" or
+                  (projection.current_state == "synced" and
+                     fragment("? IS DISTINCT FROM ?", projection.synced_body_hash, post.body_hash))),
+           order_by: projection.id
+       )}
+    end
   end
 
-  def get!(id), do: Repo.get!(Projection, id)
+  def get(%Scope{} = scope, id) do
+    case scoped_projection(scope, id) do
+      {:ok, _scope, projection} -> {:ok, projection}
+      error -> error
+    end
+  end
 
-  def create(%Post{} = post, attrs) do
-    attrs = put_default_identifier(attrs, post.id)
-
-    %Projection{}
-    |> Projection.changeset(attrs)
-    |> put_change(:post_id, post.id)
-    |> Repo.insert()
+  def create(%Scope{} = scope, %Post{} = post, attrs) do
+    Repo.transaction(fn ->
+      with {:ok, scope} <- Scope.refresh(scope),
+           {:ok, post} <- Post.Manager.get(scope, post.id),
+           {:ok, projection} <-
+             %Projection{}
+             |> Projection.changeset(put_default_identifier(attrs, post.id))
+             |> put_change(:post_id, post.id)
+             |> Repo.insert() do
+        projection
+      else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
   end
 
   def change(%Projection{} = projection, attrs \\ %{}) do
     Projection.changeset(projection, attrs)
   end
 
-  def sync(%Actor{} = actor, %Projection{} = projection) do
-    Eventful.Transit.perform(projection, actor, "sync")
+  def sync(%Scope{} = scope, %Projection{} = projection) do
+    perform_transition(scope, projection, "sync")
   end
 
-  def complete(%Actor{} = actor, %Projection{} = projection, tama_entity_id, body_hash) do
-    Eventful.Transit.perform(projection, actor, "complete",
+  def complete(%Scope{} = scope, %Projection{} = projection, tama_entity_id, body_hash) do
+    perform_transition(scope, projection, "complete",
       parameters: %{tama_entity_id: tama_entity_id, body_hash: body_hash}
     )
   end
 
-  def fail(%Actor{} = actor, %Projection{} = projection, reason) when is_atom(reason) do
-    Eventful.Transit.perform(projection, actor, "fail",
-      parameters: %{reason: Atom.to_string(reason)}
-    )
+  def fail(%Scope{} = scope, %Projection{} = projection, reason) when is_atom(reason) do
+    perform_transition(scope, projection, "fail", parameters: %{reason: Atom.to_string(reason)})
   end
 
-  def retry(%Actor{} = actor, %Projection{} = projection) do
-    Eventful.Transit.perform(projection, actor, "retry")
+  def retry(%Scope{} = scope, %Projection{} = projection) do
+    perform_transition(scope, projection, "retry")
   end
 
-  def invalidate(%Actor{} = actor, %Projection{} = projection) do
-    Eventful.Transit.perform(projection, actor, "invalidate")
+  def invalidate(%Scope{} = scope, %Projection{} = projection) do
+    perform_transition(scope, projection, "invalidate")
   end
 
-  def invalidate_for_post(%Actor{} = actor, %Post{} = post) do
+  def invalidate_for_post(%Scope{} = scope, %Post{} = post) do
+    with {:ok, scope} <- Scope.refresh(scope),
+         %Post{} = post <- Repo.get_by(Post, id: post.id, owner_actor_id: scope.owner.id) do
+      invalidate_projections(scope, post)
+    else
+      nil -> {:error, :not_found}
+      error -> error
+    end
+  end
+
+  defp invalidate_projections(scope, post) do
     Projection
     |> where(
       [projection],
@@ -79,11 +106,34 @@ defmodule Memovee.Memory.Projection.Manager do
     |> order_by([projection], asc: projection.id)
     |> Repo.all()
     |> Enum.reduce_while({:ok, []}, fn projection, {:ok, transitions} ->
-      case invalidate(actor, projection) do
+      case invalidate(scope, projection) do
         {:ok, transition} -> {:cont, {:ok, [transition | transitions]}}
         {:error, error} -> {:halt, {:error, error}}
       end
     end)
+  end
+
+  defp perform_transition(%Scope{} = scope, %Projection{} = projection, event, opts \\ []) do
+    with {:ok, scope, projection} <- scoped_projection(scope, projection.id) do
+      Eventful.Transit.perform(projection, scope.actor, event, opts)
+    end
+  end
+
+  defp scoped_projection(scope, id) do
+    with {:ok, id} <- Ecto.UUID.cast(id), {:ok, scope} <- Scope.refresh(scope) do
+      case Repo.one(
+             from projection in Projection,
+               join: post in Post,
+               on: post.id == projection.post_id,
+               where: projection.id == ^id and post.owner_actor_id == ^scope.owner.id
+           ) do
+        nil -> {:error, :not_found}
+        projection -> {:ok, scope, projection}
+      end
+    else
+      :error -> {:error, :invalid_id}
+      error -> error
+    end
   end
 
   def complete_transition({projection_changeset, event_changeset}) do
@@ -105,8 +155,11 @@ defmodule Memovee.Memory.Projection.Manager do
       event_changeset = refresh_event_changes(event_changeset, projection_changeset)
 
       Multi.new()
-      |> Multi.run(:body_hash, fn repo, _changes ->
-        verify_body_hash(repo, projection_changeset.data.post_id, body_hash)
+      |> Multi.run(:authorization, fn _, _ ->
+        authorize_transition(projection_changeset, event_changeset)
+      end)
+      |> Multi.run(:body_hash, fn repo, %{authorization: post} ->
+        verify_body_hash(repo, post.id, body_hash)
       end)
       |> Multi.insert(:event, event_changeset)
       |> Multi.update(:resource, projection_changeset, stale_error_field: :current_state)
@@ -116,6 +169,36 @@ defmodule Memovee.Memory.Projection.Manager do
       {:error, reason} ->
         {:error, %Eventful.Error{code: :invalid_transition_parameters, message: reason}}
     end
+  end
+
+  def transition({changeset, event_changeset}) do
+    Multi.new()
+    |> Multi.run(:authorization, fn _, _ -> authorize_transition(changeset, event_changeset) end)
+    |> Multi.insert(:event, event_changeset)
+    |> Multi.update(:resource, changeset, stale_error_field: :current_state)
+    |> Repo.transaction()
+    |> normalize_transaction()
+  end
+
+  defp authorize_transition(changeset, event_changeset) do
+    actor = get_assoc(event_changeset, :actor, :struct)
+    projection = Repo.get(Projection, changeset.data.id)
+
+    with %Projection{} <- projection,
+         %Post{} = post <- Repo.get(Post, projection.post_id),
+         {:ok, scope} <- Scope.resolve(actor, transition_context(actor, post)),
+         {:ok, scope} <- Scope.refresh(scope),
+         true <- post.owner_actor_id == scope.owner.id do
+      {:ok, post}
+    else
+      _ -> {:error, :forbidden}
+    end
+  end
+
+  defp transition_context(actor, post) do
+    if actor.id == Application.get_env(:memovee, :memory_tama_actor_id),
+      do: %{"context" => %{"actor_id" => post.owner_actor_id, "origin_identifier" => post.id}},
+      else: %{}
   end
 
   defp parameter(%Eventful.Metadata{parameters: parameters}, key) do

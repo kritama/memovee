@@ -11,7 +11,7 @@ defmodule Memovee.Memory.Projection.Transitions do
   Projection
   |> transition(
     [from: "pending", to: "syncing", via: "sync"],
-    fn changes -> transit(changes) end
+    &Manager.transition/1
   )
 
   Projection
@@ -23,30 +23,30 @@ defmodule Memovee.Memory.Projection.Transitions do
   Projection
   |> transition(
     [from: "syncing", to: "failed", via: "fail"],
-    fn changes -> transit(changes) end
+    &Manager.transition/1
   )
 
   Projection
   |> transition(
     [from: "failed", to: "syncing", via: "retry"],
-    fn changes -> transit(changes) end
+    &Manager.transition/1
   )
 
   Projection
   |> transition(
     [from: "synced", to: "pending", via: "invalidate"],
-    fn changes -> transit(changes) end
+    &Manager.transition/1
   )
 
   Projection
   |> transition(
     [from: "failed", to: "pending", via: "invalidate"],
-    fn changes -> transit(changes) end
+    &Manager.transition/1
   )
 
   Projection
   |> transition(
     [from: "syncing", to: "pending", via: "invalidate"],
-    fn changes -> transit(changes) end
+    &Manager.transition/1
   )
 end

@@ -1,7 +1,6 @@
 defmodule Memovee.Memory.ProjectionTest do
   use ExUnit.Case, async: true
 
-  alias Memovee.Accounts.Actor
   alias Memovee.Memory.Projection
 
   test "casts target identity without permitting lifecycle or remote result updates" do
@@ -33,15 +32,5 @@ defmodule Memovee.Memory.ProjectionTest do
     pending_events = Projection.Transitions.possible_events(%Projection{current_state: "pending"})
 
     assert [%{from: "pending", to: "syncing", via: "sync"}] = pending_events
-  end
-
-  test "rejects invalid completion parameters" do
-    projection = %Projection{current_state: "syncing"}
-
-    assert {:error,
-            %Eventful.Error{
-              code: :invalid_transition_parameters,
-              message: :invalid_tama_entity_id
-            }} = Projection.Manager.complete(%Actor{}, projection, "invalid", "invalid")
   end
 end

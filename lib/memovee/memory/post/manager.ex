@@ -5,37 +5,203 @@ defmodule Memovee.Memory.Post.Manager do
 
   import Ecto.Query, only: [from: 2]
 
-  alias Ecto.Multi
-  alias Memovee.Accounts.Actor
-  alias Memovee.Memory.{Post, Projection}
+  alias Memovee.Memory.{Post, Projection, Scope, Tag, Tagging}
+  alias Memovee.Projections
   alias Memovee.Repo
 
-  def list, do: Repo.all(from post in Post, order_by: [desc: post.id])
-
-  def get!(id), do: Repo.get!(Post, id)
-
-  def create(attrs) do
-    %Post{}
-    |> Post.changeset(attrs)
-    |> Repo.insert()
+  def list(%Scope{} = scope) do
+    with {:ok, scope} <- Scope.refresh(scope) do
+      {:ok,
+       Repo.all(
+         from post in Post,
+           where: post.owner_actor_id == ^scope.owner.id,
+           order_by: [desc: post.id]
+       )}
+    end
   end
 
-  def update(%Actor{} = actor, %Post{} = post, attrs) do
-    Multi.new()
-    |> Multi.update(:post, Post.changeset(post, attrs))
-    |> Multi.run(:projections, fn _repo, %{post: updated_post} ->
-      if updated_post.body_hash == post.body_hash do
-        {:ok, []}
-      else
-        Projection.Manager.invalidate_for_post(actor, updated_post)
+  def get(%Scope{} = scope, id) do
+    with {:ok, id} <- Ecto.UUID.cast(id), {:ok, scope} <- Scope.refresh(scope) do
+      case Repo.get_by(Post, id: id, owner_actor_id: scope.owner.id) do
+        nil -> {:error, :not_found}
+        post -> {:ok, post}
+      end
+    else
+      :error -> {:error, :invalid_id}
+      error -> error
+    end
+  end
+
+  def create(%Scope{} = scope, attrs) do
+    Repo.transaction(fn ->
+      scope = unwrap(Scope.refresh(scope))
+      origin = if scope.service?, do: scope.origin_identifier
+      lock_origin(scope.owner.id, origin)
+
+      case existing_post(scope.owner.id, origin) do
+        nil -> persist(scope, origin, attrs)
+        post -> saved(scope, post, true)
       end
     end)
-    |> Repo.transaction()
-    |> case do
-      {:ok, %{post: updated_post}} -> {:ok, updated_post}
-      {:error, :post, changeset, _changes} -> {:error, changeset}
-      {:error, :projections, error, _changes} -> {:error, error}
+  end
+
+  defp lock_origin(_owner_id, nil), do: :ok
+
+  defp lock_origin(owner_id, origin) do
+    # Serialize absent-row creation too; the unique index remains the final invariant.
+    Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+      owner_id <> ":" <> origin
+    ])
+  end
+
+  defp existing_post(_owner_id, nil), do: nil
+
+  defp existing_post(owner_id, origin) do
+    Repo.one(
+      from post in Post,
+        where: post.owner_actor_id == ^owner_id and post.origin_identifier == ^origin,
+        lock: "FOR UPDATE"
+    )
+  end
+
+  defp persist(scope, origin, attrs) do
+    changeset =
+      %Post{
+        owner_actor_id: scope.owner.id,
+        created_by_actor_id: scope.actor.id,
+        origin_identifier: origin
+      }
+      |> Post.changeset(attrs, structured: scope.service?)
+
+    if not changeset.valid?, do: Repo.rollback(changeset)
+
+    metadata = Ecto.Changeset.get_field(changeset, :metadata)
+    tags = unwrap(Tag.prepare(fetch_tags(attrs), metadata, scope.service?))
+    if scope.service?, do: authorize_references!(scope.owner.id, metadata)
+    post = changeset |> Repo.insert() |> unwrap()
+
+    Enum.each(tags, &attach_tag(post, &1))
+    unwrap(validate_structured_posts([post]))
+    unwrap(Projections.create_indexing(scope, post))
+    saved(scope, post, false)
+  end
+
+  defp attach_tag(post, attrs) do
+    %Tag{owner_actor_id: post.owner_actor_id}
+    |> Tag.changeset(attrs)
+    |> Repo.insert(on_conflict: :nothing, conflict_target: [:owner_actor_id, :namespace, :key])
+    |> unwrap()
+
+    tag =
+      Repo.one!(
+        from tag in Tag,
+          where:
+            tag.owner_actor_id == ^post.owner_actor_id and tag.namespace == ^attrs["namespace"] and
+              tag.key == ^attrs["key"],
+          lock: "FOR SHARE"
+      )
+
+    unwrap(%Tagging{} |> Tagging.changeset(post, tag) |> Repo.insert())
+  end
+
+  defp saved(scope, post, replayed) do
+    projection = unwrap(Projections.get_post_indexing(scope, post))
+
+    tag_ids =
+      Repo.all(
+        from tagging in Tagging,
+          where: tagging.post_id == ^post.id,
+          order_by: tagging.tag_id,
+          select: tagging.tag_id
+      )
+
+    receipt = %{
+      post_id: post.id,
+      body_hash: post.body_hash,
+      tag_ids: tag_ids,
+      indexing_status: projection.current_state,
+      replayed: replayed
+    }
+
+    %{post: post, receipt: receipt, replayed: replayed}
+  end
+
+  defp authorize_references!(owner_id, metadata) do
+    ids = Map.get(metadata, "derived_from_post_ids", [])
+
+    if ids != [] do
+      count =
+        Repo.aggregate(
+          from(post in Post,
+            where: post.id in ^ids and post.owner_actor_id == ^owner_id
+          ),
+          :count
+        )
+
+      if count != length(ids), do: Repo.rollback(:invalid_candidate)
     end
+  end
+
+  def update(%Scope{} = scope, %Post{} = post, attrs) do
+    Repo.transaction(fn ->
+      scope = Scope.refresh(scope) |> unwrap()
+
+      current =
+        Repo.one(
+          from row in Post,
+            where: row.id == ^post.id and row.owner_actor_id == ^scope.owner.id,
+            lock: "FOR UPDATE"
+        ) || Repo.rollback(:not_found)
+
+      changeset = Post.changeset(current, attrs)
+      candidate = Ecto.Changeset.apply_changes(changeset)
+
+      if Post.structured?(candidate) do
+        unwrap(validate_structured_posts([candidate]))
+        authorize_references!(scope.owner.id, candidate.metadata)
+      end
+
+      updated = unwrap(Repo.update(changeset))
+      invalidate_sync(scope, current, updated)
+
+      if Enum.any?([:title, :body, :metadata], &Map.has_key?(changeset.changes, &1)),
+        do: unwrap(Projections.bump_indexing_revision(scope, updated)),
+        else: updated
+    end)
+  end
+
+  defp invalidate_sync(scope, current, updated) do
+    if updated.body_hash != current.body_hash,
+      do: unwrap(Projection.Manager.invalidate_for_post(scope, updated))
+  end
+
+  defp fetch_tags(attrs), do: Map.get(attrs, "tags", Map.get(attrs, :tags, []))
+
+  defp unwrap(:ok), do: :ok
+  defp unwrap({:ok, value}), do: value
+  defp unwrap({:error, error}), do: Repo.rollback(error)
+
+  @doc false
+  def validate_structured_posts(posts) when is_list(posts) do
+    structured_posts = Enum.filter(posts, &Post.structured?/1)
+    post_ids = Enum.map(structured_posts, & &1.id)
+
+    tags_by_post =
+      Repo.all(
+        from tagging in Tagging,
+          join: tag in Tag,
+          on: tag.id == tagging.tag_id,
+          where: tagging.post_id in ^post_ids,
+          select: {tagging.post_id, tag}
+      )
+      |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+
+    Enum.reduce_while(structured_posts, :ok, fn post, :ok ->
+      case Post.validate_structure(post, Map.get(tags_by_post, post.id, [])) do
+        :ok -> {:cont, :ok}
+        error -> {:halt, error}
+      end
+    end)
   end
 
   def change(%Post{} = post, attrs \\ %{}), do: Post.changeset(post, attrs)

@@ -1,46 +1,59 @@
 defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
-  use MemoveeWeb.ConnCase, async: true
+  use MemoveeWeb.ConnCase, async: false
 
   import Memovee.AccountsFixtures
   import OpenApiSpex.TestAssertions
 
   alias Memovee.Memory.Post
   alias Memovee.Repo
+  alias MemoveeWeb.Schemas.Tama.ApiSpec
 
   setup do
     owner = user_fixture().actor
     agent = agent_fixture(owner)
-    credential = api_token_fixture(owner, agent)
+    service = agent_fixture(owner)
+    credential = api_token_fixture(owner, service)
+    ordinary = api_token_fixture(owner, agent)
+    previous = Application.get_env(:memovee, :memory_tama_actor_id)
+    Application.put_env(:memovee, :memory_tama_actor_id, service.id)
+    on_exit(fn -> Application.put_env(:memovee, :memory_tama_actor_id, previous) end)
+    context = %{"actor_id" => agent.id, "origin_identifier" => "mcp-app:message:v1:test"}
 
-    %{credential: credential}
+    %{credential: credential, ordinary: ordinary, context: context}
   end
 
-  test "creates a canonical memory post", %{conn: conn, credential: credential} do
-    attrs = %{
-      "title" => "Launch notes",
-      "body" => "The launch is scheduled for Friday.",
-      "metadata" => %{"source" => "agent"}
-    }
+  test "creates a canonical memory post", %{conn: conn, credential: credential, context: context} do
+    attrs =
+      File.read!("tama/graph/schemas/memory-fixtures.v1.json")
+      |> Jason.decode!()
+      |> get_in(["extraction", Access.at(0), "expected", "post"])
+
+    assert_request_schema(
+      %{"context" => context, "post" => attrs},
+      "CreateMemoryPostRequest",
+      ApiSpec.spec()
+    )
 
     conn =
       conn
       |> authorize(credential)
-      |> post(~p"/tama/memory/posts", attrs)
+      |> post(~p"/tama/memory/posts", %{"context" => context, "post" => attrs})
 
-    assert_operation_response(conn)
+    assert_operation_response(conn, "memory_post_create")
 
     assert %{
              "data" => %{
                "id" => id,
-               "title" => "Launch notes",
+               "title" => "Memovee HTTP preference",
                "body" => body,
                "body_hash" => body_hash,
-               "metadata" => %{"source" => "agent"},
+               "metadata" => metadata,
                "inserted_at" => inserted_at,
                "updated_at" => updated_at
              }
            } = json_response(conn, 201)
 
+    assert metadata == attrs["metadata"]
     assert body == attrs["body"]
     assert body_hash == sha256(body)
     assert is_binary(inserted_at)
@@ -53,16 +66,23 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
     assert post.metadata == attrs["metadata"]
   end
 
-  test "defaults metadata when it is omitted", %{conn: conn, credential: credential} do
+  test "rejects missing structured metadata", %{
+    conn: conn,
+    credential: credential,
+    context: context
+  } do
     conn =
       conn
       |> authorize(credential)
-      |> post(~p"/tama/memory/posts", %{"body" => "A memory without metadata."})
+      |> post(~p"/tama/memory/posts", %{
+        "context" => context,
+        "post" => %{"body" => "A memory without metadata."}
+      })
 
-    assert %{"data" => %{"metadata" => %{}}} = json_response(conn, 201)
+    assert %{"error" => %{"code" => "invalid_request"}} = json_response(conn, 422)
   end
 
-  test "rejects invalid and server-owned attributes", %{credential: credential} do
+  test "rejects invalid and server-owned attributes", %{credential: credential, context: context} do
     invalid_requests = [
       %{},
       %{"body" => " \n\t "},
@@ -73,9 +93,33 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
       conn =
         build_conn()
         |> authorize(credential)
-        |> post(~p"/tama/memory/posts", request)
+        |> post(~p"/tama/memory/posts", %{"context" => context, "post" => request})
 
-      assert %{"errors" => [_error | _]} = json_response(conn, 422)
+      assert %{"error" => %{"code" => "invalid_request"}} = json_response(conn, 422)
+      assert_operation_response(conn, "memory_post_create")
+    end
+
+    assert Repo.aggregate(Post, :count) == 0
+  end
+
+  test "requires a post object and rejects misplaced or unexpected fields", %{
+    credential: credential,
+    context: context
+  } do
+    for attrs <- [
+          %{},
+          %{"post" => nil},
+          %{"post" => []},
+          %{"body" => "unnested"},
+          %{"post" => %{"body" => "valid"}, "title" => "misplaced"},
+          %{"post" => %{"body" => "valid", "context" => %{}}}
+        ] do
+      conn =
+        build_conn()
+        |> authorize(credential)
+        |> post(~p"/tama/memory/posts", Map.put(attrs, "context", context))
+
+      assert %{"error" => %{"code" => "invalid_request"}} = json_response(conn, 422)
     end
 
     assert Repo.aggregate(Post, :count) == 0
@@ -95,7 +139,7 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
       |> json_response(200)
 
     assert %{"post" => operation} = spec["paths"]["/tama/memory/posts"]
-    assert operation["operationId"] == "MemoveeWeb.Tama.Memory.PostController.create"
+    assert operation["operationId"] == "memory_post_create"
     assert operation["security"] == nil
     assert Map.has_key?(operation["responses"], "201")
     assert spec["security"] == [%{"bearer_auth" => []}]
@@ -105,6 +149,166 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
              "scheme" => "bearer",
              "bearerFormat" => "<client-id>.<client-secret>"
            }
+  end
+
+  test "service save and replay publish the documented envelopes", %{
+    credential: credential,
+    context: context
+  } do
+    attrs = %{
+      context: context,
+      post: %{
+        title: nil,
+        body: "Use Req.",
+        tags: [],
+        metadata: %{
+          kind: "preference",
+          epistemic_status: "user_stated",
+          approval: "unspecified",
+          source: %{channel: "agent", reference: nil},
+          occurred_at: nil,
+          effective_at: nil,
+          derived_from_post_ids: []
+        }
+      }
+    }
+
+    assert_request_schema(
+      Jason.decode!(Jason.encode!(attrs)),
+      "CreateMemoryPostRequest",
+      ApiSpec.spec()
+    )
+
+    conn = request(credential, "/tama/memory/posts", attrs)
+    assert_operation_response(conn, "memory_post_create")
+
+    assert %{"data" => %{"id" => post_id, "receipt" => %{"replayed" => false}}} =
+             json_response(conn, 201)
+
+    conn =
+      request(credential, "/tama/memory/posts", %{context: context, post: %{body: nil}})
+
+    assert %{"data" => %{"id" => ^post_id, "receipt" => %{"replayed" => true}}} =
+             json_response(conn, 200)
+  end
+
+  test "origin identifiers are limited to 512 Unicode code points", %{
+    credential: credential,
+    context: context
+  } do
+    post =
+      File.read!("tama/graph/schemas/memory-fixtures.v1.json")
+      |> Jason.decode!()
+      |> get_in(["extraction", Access.at(0), "expected", "post"])
+
+    for character <- ["a", "😀"] do
+      attrs = %{
+        "context" => Map.put(context, "origin_identifier", String.duplicate(character, 512)),
+        "post" => post
+      }
+
+      assert_request_schema(attrs, "CreateMemoryPostRequest", ApiSpec.spec())
+      assert request(credential, "/tama/memory/posts", attrs).status == 201
+    end
+
+    count = Repo.aggregate(Post, :count)
+
+    for origin <- [
+          String.duplicate("a", 513),
+          String.duplicate("😀", 513),
+          String.duplicate("e\u0301", 257)
+        ] do
+      attrs = %{context: Map.put(context, "origin_identifier", origin), post: post}
+      conn = request(credential, "/tama/memory/posts", attrs)
+      assert %{"error" => %{"code" => "invalid_request"}} = json_response(conn, 422)
+      assert_operation_response(conn, "memory_post_create")
+      assert Repo.aggregate(Post, :count) == count
+    end
+
+    spec = build_conn() |> get("/tama/openapi") |> json_response(200)
+
+    assert spec["components"]["schemas"]["MemoryContext"]["properties"]["origin_identifier"][
+             "maxLength"
+           ] == 512
+  end
+
+  test "ordinary agents cannot bypass remember", %{ordinary: ordinary} do
+    assert %{"error" => %{"code" => "forbidden"}} =
+             request(ordinary, "/tama/memory/posts", %{post: %{body: "Use Req."}})
+             |> json_response(403)
+  end
+
+  test "rejects NUL in origin identifiers before database access", %{
+    credential: credential,
+    context: context
+  } do
+    for origin <- [<<0>>, "message" <> <<0>> <> "identifier"] do
+      attrs = %{context: Map.put(context, "origin_identifier", origin), post: memory_post()}
+      conn = request(credential, "/tama/memory/posts", attrs)
+      assert %{"error" => %{"code" => "invalid_request"}} = json_response(conn, 422)
+      assert_operation_response(conn, "memory_post_create")
+    end
+
+    assert Repo.aggregate(Post, :count) == 0
+  end
+
+  test "source references are null or between 1 and 512 code points", %{
+    credential: credential,
+    context: context
+  } do
+    for {reference, index} <- Enum.with_index([nil, "a", String.duplicate("😀", 512)]) do
+      attrs = %{
+        "context" => Map.put(context, "origin_identifier", "reference-#{index}"),
+        "post" => put_in(memory_post(), ["metadata", "source", "reference"], reference)
+      }
+
+      assert_request_schema(attrs, "CreateMemoryPostRequest", ApiSpec.spec())
+      assert request(credential, "/tama/memory/posts", attrs).status == 201
+    end
+
+    count = Repo.aggregate(Post, :count)
+
+    for reference <- ["", String.duplicate("a", 513), String.duplicate("e\u0301", 257)] do
+      attrs = %{
+        context: context,
+        post: put_in(memory_post(), ["metadata", "source", "reference"], reference)
+      }
+
+      conn = request(credential, "/tama/memory/posts", attrs)
+      assert %{"error" => %{"code" => "invalid_request"}} = json_response(conn, 422)
+      assert Repo.aggregate(Post, :count) == count
+    end
+  end
+
+  test "ordinary context assertions are rejected before validation", %{ordinary: ordinary} do
+    assert %{"error" => %{"code" => "forbidden_context"}} =
+             request(ordinary, "/tama/memory/posts", %{context: nil}) |> json_response(403)
+  end
+
+  test "the OpenAPI exposes only the save operation", %{
+    credential: credential,
+    context: context
+  } do
+    assert request(credential, "/tama/memory/posts", %{
+             context: Map.put(context, "actor_id", "bad")
+           }).status == 422
+
+    spec = build_conn() |> get("/tama/openapi") |> json_response(200)
+    assert Map.has_key?(spec["paths"], "/tama/memory/posts")
+    refute Map.has_key?(spec["paths"], "/tama/memory/ingestions")
+    refute Map.has_key?(spec["paths"], "/tama/memory/ingestions/status")
+  end
+
+  defp request(credential, path, attrs) do
+    build_conn()
+    |> authorize(credential)
+    |> post(path, attrs)
+  end
+
+  defp memory_post do
+    File.read!("tama/graph/schemas/memory-fixtures.v1.json")
+    |> Jason.decode!()
+    |> get_in(["extraction", Access.at(0), "expected", "post"])
   end
 
   defp authorize(conn, credential) do
@@ -120,5 +324,236 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
     :sha256
     |> :crypto.hash(body)
     |> Base.encode16(case: :lower)
+  end
+
+  test "invalid persisted text returns 422 without creating a post", %{
+    credential: credential,
+    context: context
+  } do
+    post = memory_post()
+
+    for invalid <- [
+          Map.put(post, "body", "bad\u0000body"),
+          Map.put(post, "title", "bad\u0000title"),
+          put_in(post, ["metadata", "source", "reference"], "bad\u0000reference"),
+          Map.put(post, "tags", [
+            %{"namespace" => "topic", "key" => "elixir", "name" => "bad\u0000name"}
+          ]),
+          Map.put(post, "title", String.duplicate("e\u0301", 128)),
+          Map.put(post, "tags", [
+            %{
+              "namespace" => "topic",
+              "key" => "elixir",
+              "name" => String.duplicate("e\u0301", 128)
+            }
+          ])
+        ] do
+      conn = request(credential, "/tama/memory/posts", %{context: context, post: invalid})
+      assert %{"error" => %{"code" => "invalid_request"}} = json_response(conn, 422)
+      assert Repo.aggregate(Post, :count) == 0
+    end
+  end
+
+  test "OpenAPI publishes the canonical tag key format" do
+    spec = build_conn() |> get("/tama/openapi") |> json_response(200)
+
+    key =
+      get_in(spec, [
+        "components",
+        "schemas",
+        "CreateMemoryPostRequest",
+        "properties",
+        "post",
+        "properties",
+        "tags",
+        "allOf",
+        Access.at(0),
+        "items",
+        "properties",
+        "key"
+      ])
+
+    assert key["pattern"] == "^[a-z0-9][a-z0-9._-]*$"
+
+    body_pattern =
+      get_in(spec, [
+        "components",
+        "schemas",
+        "CreateMemoryPostRequest",
+        "properties",
+        "post",
+        "properties",
+        "body",
+        "pattern"
+      ])
+      |> Regex.compile!()
+
+    refute Regex.match?(body_pattern, " \n\t ")
+    refute Regex.match?(body_pattern, "text\u0000")
+    assert Regex.match?(body_pattern, " \nMemory text\n ")
+    pattern = Regex.compile!(key["pattern"])
+    assert Regex.match?(pattern, "memovee.core-v1")
+    refute Regex.match?(pattern, "has spaces")
+    refute Regex.match?(pattern, "slash/key")
+  end
+
+  test "multibyte bodies follow the published character limit", %{
+    credential: credential,
+    context: context
+  } do
+    for {body, index} <-
+          Enum.with_index([String.duplicate("😀", 8193), String.duplicate("😀", 32_768)]) do
+      attrs = %{
+        "context" => Map.put(context, "origin_identifier", "unicode-#{index}"),
+        "post" => Map.put(memory_post(), "body", body)
+      }
+
+      assert_request_schema(attrs, "CreateMemoryPostRequest", ApiSpec.spec())
+      conn = request(credential, "/tama/memory/posts", attrs)
+      assert conn.status == 201
+      assert_operation_response(conn, "memory_post_create")
+    end
+
+    conn =
+      request(credential, "/tama/memory/posts", %{
+        context: context,
+        post: Map.put(memory_post(), "body", String.duplicate("😀", 32_769))
+      })
+
+    assert json_response(conn, 422)["error"]["code"] == "invalid_request"
+  end
+
+  test "replays retain a valid receipt when current indexing invalidation is rejected", %{
+    credential: credential,
+    context: context
+  } do
+    attrs = %{context: context, post: memory_post()}
+    assert request(credential, "/tama/memory/posts", attrs).status == 201
+    projection = Repo.one!(Memovee.Projections.Indexing)
+
+    service =
+      Repo.get!(Memovee.Accounts.Actor, Application.fetch_env!(:memovee, :memory_tama_actor_id))
+
+    assert {:error, %Eventful.Error{code: :revision, message: :current_revision}} =
+             Eventful.Transit.perform(projection, service, "invalidate", [])
+
+    conn = request(credential, "/tama/memory/posts", attrs)
+    assert conn.status == 200
+    assert_operation_response(conn, "memory_post_create")
+  end
+
+  test "service tag inputs must be canonical and at most twelve before deduplication", %{
+    credential: credential,
+    context: context
+  } do
+    tag = %{"namespace" => "topic", "key" => "elixir", "name" => "Elixir"}
+
+    for tags <- [
+          List.duplicate(tag, 13),
+          List.duplicate(tag, 2),
+          [Map.put(tag, "namespace", " Topic ")],
+          [Map.put(tag, "key", "ELIXIR")],
+          [Map.put(tag, "key", " elixir ")]
+        ] do
+      conn =
+        request(credential, "/tama/memory/posts", %{
+          context: context,
+          post: Map.put(memory_post(), "tags", tags)
+        })
+
+      assert json_response(conn, 422)["error"]["code"] == "invalid_request"
+      assert Repo.aggregate(Post, :count) == 0
+      assert Repo.aggregate(Oban.Job, :count) == 0
+    end
+
+    conn =
+      request(credential, "/tama/memory/posts", %{
+        context: context,
+        post: Map.put(memory_post(), "tags", [tag])
+      })
+
+    assert conn.status == 201
+    assert_operation_response(conn, "memory_post_create")
+  end
+
+  test "tag capacity is enforced by both the request schema and runtime", %{
+    credential: credential,
+    context: context
+  } do
+    tags =
+      for index <- 1..12,
+          do: %{"namespace" => "topic", "key" => "tag-#{index}", "name" => "Tag #{index}"}
+
+    attrs = %{"context" => context, "post" => Map.put(memory_post(), "tags", tags)}
+
+    # The casting helper does not implement OpenAPI's not keyword.
+    spec = ApiSpec.spec()
+    schema = spec.components.schemas["CreateMemoryPostRequest"].properties.post.properties.tags
+
+    assert {:error, _} =
+             OpenApiSpex.DeprecatedCast.validate(
+               schema,
+               Enum.map(tags, &%{namespace: &1["namespace"], key: &1["key"], name: &1["name"]}),
+               "tags",
+               spec.components.schemas
+             )
+
+    assert request(credential, "/tama/memory/posts", attrs).status == 422
+
+    kind = memory_post()["metadata"]["kind"]
+
+    for {accepted, index} <-
+          Enum.with_index([
+            Enum.take(tags, 11),
+            Enum.take(tags, 11) ++
+              [%{"namespace" => "kind", "key" => kind, "name" => String.capitalize(kind)}]
+          ]) do
+      attrs = %{
+        "context" => Map.put(context, "origin_identifier", "capacity-#{index}"),
+        "post" => Map.put(memory_post(), "tags", accepted)
+      }
+
+      assert_request_schema(attrs, "CreateMemoryPostRequest", ApiSpec.spec())
+
+      assert :ok =
+               OpenApiSpex.DeprecatedCast.validate(
+                 schema,
+                 Enum.map(
+                   accepted,
+                   &%{namespace: &1["namespace"], key: &1["key"], name: &1["name"]}
+                 ),
+                 "tags",
+                 spec.components.schemas
+               )
+
+      conn = request(credential, "/tama/memory/posts", attrs)
+      assert conn.status == 201
+      assert_operation_response(conn, "memory_post_create")
+      assert length(json_response(conn, 201)["data"]["receipt"]["tag_ids"]) == 12
+    end
+  end
+
+  test "nonblank origin and tag name requirements are published", %{
+    credential: credential,
+    context: context
+  } do
+    post = memory_post()
+
+    for attrs <- [
+          %{"context" => Map.put(context, "origin_identifier", " \n\t "), "post" => post},
+          %{
+            "context" => context,
+            "post" =>
+              Map.put(post, "tags", [
+                %{"namespace" => "topic", "key" => "test", "name" => " \n\t "}
+              ])
+          }
+        ] do
+      assert_raise ExUnit.AssertionError, fn ->
+        assert_request_schema(attrs, "CreateMemoryPostRequest", ApiSpec.spec())
+      end
+
+      assert request(credential, "/tama/memory/posts", attrs).status == 422
+    end
   end
 end

@@ -169,3 +169,5 @@ if config_env() == :prod do
   #
   # See https://swoosh.hexdocs.pm/Swoosh.html#module-installation for details.
 end
+
+config :memovee, :memory_tama_actor_id, System.get_env("MEMOVEE_MEMORY_TAMA_ACTOR_ID")

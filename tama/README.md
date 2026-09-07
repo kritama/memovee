@@ -18,8 +18,8 @@ If any check fails, or Compose is older than 2.20.0, install or
 start/initialize Docker before continuing.
 
 ```bash
-docker compose -f 'compose.yaml' -f 'compose.tama.yaml' up -d --build caddy
-docker compose -f 'compose.yaml' -f 'compose.tama.yaml' ps
+docker compose up -d --build
+docker compose ps
 ```
 
 Tama is available at <https://tama.app.localhost/>. To complete the supported

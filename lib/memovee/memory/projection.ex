@@ -6,7 +6,7 @@ defmodule Memovee.Memory.Projection do
   use Memovee.Schema
   use Eventful.Transitable
 
-  alias Memovee.Memory.Post
+  alias Memovee.Memory.{Metadata, Post}
   alias __MODULE__.{Event, Transitions}
 
   Transitions
@@ -33,7 +33,9 @@ defmodule Memovee.Memory.Projection do
     projection
     |> cast(attrs, [:identifier, :tama_space_id, :tama_class_id, :metadata])
     |> validate_required([:identifier, :tama_space_id, :tama_class_id, :metadata])
-    |> validate_length(:identifier, max: 255)
+    |> validate_length(:identifier, max: 255, count: :codepoints)
+    |> validate_format(:identifier, ~r/^[^\x00]*$/)
+    |> validate_change(:metadata, &Metadata.validate_strings/2)
     |> validate_change(:identifier, fn :identifier, identifier ->
       if String.trim(identifier) == "", do: [identifier: "can't be blank"], else: []
     end)

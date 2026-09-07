@@ -7,6 +7,32 @@ defmodule MemoveeWeb.FallbackController do
 
   use MemoveeWeb, :controller
 
+  def call(conn, {:error, {:memory, reason}}) do
+    {status, code, message} =
+      case reason do
+        :forbidden_context ->
+          {:forbidden, "forbidden_context",
+           "Only the configured Tama service may assert context."}
+
+        :forbidden ->
+          {:forbidden, "forbidden", "Memory access is forbidden."}
+
+        :not_found ->
+          {:not_found, "not_found", "Memory resource not found."}
+
+        :kind_tag_mismatch ->
+          {:unprocessable_entity, "kind_tag_mismatch", "The kind tag must match the memory kind."}
+
+        _ ->
+          {:unprocessable_entity, "invalid_request", "Invalid memory request."}
+      end
+
+    conn
+    |> put_status(status)
+    |> put_view(json: MemoveeWeb.ErrorJSON)
+    |> render(:memory, code: code, message: message)
+  end
+
   def call(conn, {:error, %Ecto.Changeset{} = changeset}) do
     conn
     |> put_status(:unprocessable_entity)

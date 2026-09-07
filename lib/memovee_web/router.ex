@@ -15,7 +15,7 @@ defmodule MemoveeWeb.Router do
 
   pipeline :tama_api do
     plug :accepts, ["json"]
-    plug OpenApiSpex.Plug.PutApiSpec, module: MemoveeWeb.Tama.ApiSpec
+    plug OpenApiSpex.Plug.PutApiSpec, module: MemoveeWeb.Schemas.Tama.ApiSpec
   end
 
   pipeline :authenticated_api do

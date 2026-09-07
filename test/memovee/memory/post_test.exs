@@ -24,4 +24,60 @@ defmodule Memovee.Memory.PostTest do
     refute changeset.valid?
     assert {"can't be blank", _options} = changeset.errors[:body]
   end
+
+  test "source identifiers are assigned by trusted code, never cast from input" do
+    post = %Post{origin_identifier: "trusted:source"}
+    changeset = Post.changeset(post, %{"body" => "source", "origin_identifier" => "forged"})
+    assert Ecto.Changeset.get_field(changeset, :origin_identifier) == "trusted:source"
+  end
+
+  test "body limits count Unicode code points" do
+    assert Post.changeset(%Post{}, %{"body" => String.duplicate("🙂", 32_768)}).valid?
+
+    refute Post.changeset(%Post{}, %{"body" => String.duplicate("🙂", 32_769)}).valid?
+
+    refute Post.changeset(%Post{}, %{"body" => String.duplicate("a", 32_769)}).valid?
+  end
+
+  test "reserved metadata keys are rejected at any nesting depth" do
+    for key <-
+          ~w(owner_actor_id actor_id created_by_actor_id current_state current_state_version origin_identifier) do
+      attrs = %{"body" => "source", "metadata" => %{"nested" => [%{key => "forged"}]}}
+      refute Post.changeset(%Post{}, attrs).valid?
+    end
+
+    assert Post.changeset(%Post{}, %{
+             "body" => "source",
+             "metadata" => %{"arbitrary" => [1, true, nil]}
+           }).valid?
+  end
+
+  test "rejects NUL in text and nested metadata strings or keys" do
+    for attrs <- [
+          %{"title" => "bad\u0000title"},
+          %{"body" => "bad\u0000body"},
+          %{"metadata" => %{"nested" => [%{"value" => "bad\u0000value"}]}},
+          %{"metadata" => %{"nested" => [%{"bad\u0000key" => true}]}}
+        ] do
+      refute Post.changeset(%Post{}, Map.merge(%{"body" => "source"}, attrs)).valid?
+    end
+  end
+
+  test "title limits count Unicode code points" do
+    for title <- [String.duplicate("😀", 255), String.duplicate("e\u0301", 127) <> "e"] do
+      assert Post.changeset(%Post{}, %{body: "source", title: title}).valid?
+    end
+
+    refute Post.changeset(%Post{}, %{body: "source", title: String.duplicate("e\u0301", 128)}).valid?
+  end
+
+  test "published body boundary fixtures match validation" do
+    fixtures = File.read!("tama/graph/schemas/memory-fixtures.v1.json") |> Jason.decode!()
+
+    for boundary <- fixtures["boundaries"] do
+      body = String.duplicate(boundary["repeat"], boundary["count"])
+      assert byte_size(body) == boundary["utf8_bytes"]
+      assert Post.changeset(%Post{}, %{body: body}).valid? == boundary["accepted"], boundary["id"]
+    end
+  end
 end

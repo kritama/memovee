@@ -12,3 +12,10 @@
 
 # Tama Kit local HTTPS certificate material
 /tls/
+
+# Local memory credentials, saved plans and retained development state
+/.memory.env
+/.memory/
+*.tfplan
+*.tfvars
+*.tfvars.json

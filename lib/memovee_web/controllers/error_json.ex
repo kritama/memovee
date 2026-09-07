@@ -5,6 +5,10 @@ defmodule MemoveeWeb.ErrorJSON do
   See config/config.exs.
   """
 
+  def render("memory.json", %{code: code, message: message}) do
+    %{error: %{code: code, message: message, retryable: false, details: %{}}}
+  end
+
   def render(template, _assigns) do
     message = Phoenix.Controller.status_message_from_template(template)
 
