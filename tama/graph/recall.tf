@@ -19,10 +19,10 @@ module "recall-result-publication-request" {
 
 resource "tama_class" "recall-result" {
   space_id = module.recall.space_id
-  schema_json = jsonencode(merge(local.contracts, {
+  schema_json = jsonencode(merge(local.runtime_contracts, {
     title       = "recall-result"
     description = "Root publication for recall; runtime owns transport correlation fields."
-    "$ref"      = "#/$defs/ResultPublication"
+    "$ref"      = "#/definitions/RecallResultPublication"
   }))
 }
 
@@ -31,14 +31,31 @@ resource "tama_chain" "recall-result-delivery" {
   name     = "recall-result"
 }
 
-# #11 enables result delivery only after the terminal path is implemented.
+resource "tama_modular_thought" "recall-result-delivery" {
+  chain_id        = tama_chain.recall-result-delivery.id
+  relation        = "result-publication"
+  index           = 0
+  output_class_id = tama_class.recall-result.id
+
+  module {
+    reference  = "tama/agentic/result"
+    parameters = jsonencode({})
+  }
+
+  faculty {
+    queue_id = tama_queue.interactive.id
+    priority = 0
+  }
+}
+
 resource "tama_node" "recall-result-delivery" {
-  count    = 0
   space_id = module.recall.space_id
   class_id = module.recall-result-publication-request.class.id
   chain_id = tama_chain.recall-result-delivery.id
   type     = "reactive"
   on       = "processing"
+
+  depends_on = [tama_modular_thought.recall-result-delivery]
 }
 
 resource "tama_chain" "recall-forward" {

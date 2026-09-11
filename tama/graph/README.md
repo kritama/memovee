@@ -38,12 +38,16 @@ folder with the same basename as that file:
 
 `schemas/memory-contract.v1.json` is the shared memory data contract published in
 issue #9. `schemas.tf` loads it for the result classes in both `remember.tf` and
-`recall.tf`. `schemas/memory-fixtures.v1.json` holds the examples from #16 for
-future tests; nothing currently consumes it. The v1 bundle retains its gated
-v1.1 definitions; renaming files does not change contract versions or payloads.
+`recall.tf`, projecting its canonical 2020-12 `$defs` vocabulary and null-codepoint
+patterns to the draft-07/PCRE form accepted by Tama 0.14.0's JsonXema validator.
+`schemas/memory-fixtures.v1.json` holds the examples from #16 and the result
+delivery cases exercised by the Memovee contract tests. The v1 bundle retains its
+gated v1.1 definitions; renaming files does not change contract versions or
+payloads.
 
 `corpora/` holds shared assets: `generation-input.md` is used by memory write,
-query and index; `json.liquid` is used by both roots. Provider schemas wrap the
+query and index; the result fixture corpora provide deterministic, schema-validated
+terminal outcomes without a model or backend call. Provider schemas wrap the
 domain value for structured model output and are read directly by Terraform.
 Backend ownership, payload semantics and idempotency belong in #10's Elixir code
 and tests; Terraform configuration validation cannot enforce them.
@@ -60,11 +64,20 @@ The graph follows the feature-oriented file layout in `memovee-tama`:
   and `index-snapshot.tf` keep each handler's request class, chain and node together.
 - `outputs.tf` exposes the public interfaces; it does not construct the graph.
 
-#11 adds result delivery and #12/#13/#15 fill the remember/index/recall chains.
-Reactive nodes have `count = 0` in their owning files until those chains have real terminal paths.
-`memory_interfaces.ready` is therefore false. The API source space and explicit
+#11 supplies active root result publishers plus test-gated deterministic component
+producers. #12/#13/#15 fill the real remember/index/recall chains. Their production
+entry nodes remain disabled until those chains have complete terminal paths, so
+`memory_interfaces.ready` remains false. The API source space and explicit
 operation-ID lookup interfaces wait for the real backend specification; #13 owns
-the embeddings OpenAPI source. Tama #114–#116 remain runtime prerequisites.
+the embeddings OpenAPI source. Tama `0.14.0-server` contains the required result,
+trusted-caller, Dispatch and Render runtime baseline.
+
+For an authorized fixture-only live trace, set
+`TF_VAR_memory_result_fixtures_enabled=true`. This temporarily routes root messages
+through deterministic Render → component handoff → typed publication → return
+handoff → `tama/agentic/result`. Keep the variable false for production and remove
+the fixture entry nodes again after collecting the trace. The root publishers stay
+active because #12 and #15 reuse them for real operation outcomes.
 
 ## Local development
 

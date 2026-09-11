@@ -55,7 +55,7 @@
         "https://app.localhost"
       ]
     },
-    "tamaImage": "ghcr.io/upmaru/tama:0.13.4-server"
+    "tamaImage": "ghcr.io/upmaru/tama:0.14.0-server"
   },
   "managedFiles": {
     "tama/.memovee.integration.env": "sha256:27d64280693f521fe3daf4b7d1196423582ffe25e4c1dce0342e4da88c6dbe98",
