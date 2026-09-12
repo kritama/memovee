@@ -205,20 +205,25 @@ output "interfaces" {
     }
     results = {
       remember = {
-        request_class_id = module.remember-result-publication-request.class.id
-        class_id         = tama_class.remember-result.id
-        chain_id         = tama_chain.remember-result-delivery.id
+        request_class_id  = module.remember-result-publication-request.class.id
+        class_id          = tama_class.remember-result.id
+        producer_class_id = tama_class.memory-write-result.id
+        chain_id          = tama_chain.remember-result-delivery.id
+        publisher         = "tama/agentic/result"
       }
       recall = {
-        request_class_id = module.recall-result-publication-request.class.id
-        class_id         = tama_class.recall-result.id
-        chain_id         = tama_chain.recall-result-delivery.id
+        request_class_id  = module.recall-result-publication-request.class.id
+        class_id          = tama_class.recall-result.id
+        producer_class_id = tama_class.memory-query-result.id
+        chain_id          = tama_chain.recall-result-delivery.id
+        publisher         = "tama/agentic/result"
       }
     }
     global_space_id            = var.global_space_id
     context_metadata_corpus_id = var.context_metadata_corpus_id
     action_call_json_corpus_id = var.action_call_json_corpus_id
     completion_model_id        = module.inference.model_ids["z-ai/glm-5.3-flash"]
+    result_fixtures_enabled    = var.enable_result_fixtures
     ready                      = false
   }
 }

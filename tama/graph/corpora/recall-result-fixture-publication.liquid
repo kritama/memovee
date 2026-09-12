@@ -1,0 +1,5 @@
+{% if data.text == "fixture:runtime-failure" %}
+{"operation":"recall","outcome":"empty","claims":[],"sources":[],"indexing":{"pending_count":0,"failed_count":0},"text":" "}
+{% else %}
+{{ data | json }}
+{% endif %}
