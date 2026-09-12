@@ -76,5 +76,13 @@ A processed entity, completed forwarding chain, task acknowledgment, or save HTT
 request is not by itself a completed memory receipt. Recalled procedures do not
 grant current permissions or prove current system state.
 
+Every terminal producer must budget the complete UTF-8 JSON publication before
+forwarding it. The serialized publication, including `text`, must be at most 65,536
+bytes, and the nonblank top-level `text` must independently be at most 8,192 bytes.
+These are runtime byte constraints, not JSON Schema character limits. Preserve the
+operation-specific schema while selecting only as many complete recall sources as
+fit the publication budget; never publish a partial source object. Tama rejects an
+oversized publication without finalizing the caller's result.
+
 These examples specify the caller contract. The graph remains unavailable for
 normal production ingress until the remember and recall implementations complete.
