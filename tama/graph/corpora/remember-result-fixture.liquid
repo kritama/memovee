@@ -1,0 +1,10 @@
+{% case data.content %}
+{% when "fixture:remember:clarification" %}
+{"operation":"remember","outcome":"clarification_required","question":"Which project does this preference apply to?","candidates":[],"text":"I need one detail before saving: which project does this preference apply to?"}
+{% when "fixture:remember:failure" %}
+{"operation":"remember","outcome":"failed","error":{"code":"invalid_memory","message":"The memory could not be saved.","retryable":false},"text":"The memory could not be saved."}
+{% when "fixture:remember:runtime-failure" %}
+{"operation":"remember","outcome":"saved","post_id":"01990000-0000-7000-8000-000000000101","indexing_status":"pending","replayed":false,"text":"fixture:runtime-failure"}
+{% else %}
+{"operation":"remember","outcome":"saved","post_id":"01990000-0000-7000-8000-000000000101","indexing_status":"pending","replayed":false,"text":"Saved memory 01990000-0000-7000-8000-000000000101. Indexing is pending."}
+{% endcase %}

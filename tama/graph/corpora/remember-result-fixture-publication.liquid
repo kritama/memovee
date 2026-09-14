@@ -1,0 +1,5 @@
+{% if data.text == "fixture:runtime-failure" %}
+{"operation":"remember","outcome":"saved","post_id":"01990000-0000-7000-8000-000000000101","indexing_status":"pending","replayed":false,"text":" "}
+{% else %}
+{{ data | json }}
+{% endif %}

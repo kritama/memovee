@@ -6,6 +6,7 @@ module "memory" {
   global_schemas              = { for name, class in module.global.schemas : name => class.id }
   context_metadata_corpus_id  = module.global.context_metadata_corpus_id
   action_call_json_corpus_id  = module.global.action_call_json_corpus_id
+  enable_result_fixtures      = var.memory_result_fixtures_enabled
   openrouter_api_key          = var.memory_openrouter_api_key
   memory_api_specification_id = var.memory_api_specification_id
   memory_api_source_slug      = var.memory_api_source_slug
@@ -33,4 +34,10 @@ variable "memory_api_operations" {
   type        = set(string)
   default     = []
   description = "Only implemented backend operation IDs, never guessed controller names."
+}
+
+variable "memory_result_fixtures_enabled" {
+  type        = bool
+  default     = false
+  description = "Enables deterministic remember/recall result fixtures for an authorized live integration trace."
 }

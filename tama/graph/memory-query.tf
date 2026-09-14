@@ -36,6 +36,15 @@ resource "tama_class" "answer-candidate-provider" {
   schema_json = jsonencode(jsondecode(file("${path.module}/memory-query/answer-candidate-provider.v1.json")))
 }
 
+resource "tama_class" "memory-query-result" {
+  space_id = tama_space.memory-query.id
+  schema_json = jsonencode(merge(local.runtime_contracts, {
+    title       = "memory-query-result"
+    description = "Typed terminal recall publication produced before returning to the recall root."
+    "$ref"      = "#/definitions/RecallResultPublication"
+  }))
+}
+
 # Handler foundation; issue #15 supplies the executable chain.
 
 module "memory-query-request" {

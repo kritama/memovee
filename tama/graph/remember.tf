@@ -19,10 +19,10 @@ module "remember-result-publication-request" {
 
 resource "tama_class" "remember-result" {
   space_id = module.remember.space_id
-  schema_json = jsonencode(merge(local.contracts, {
+  schema_json = jsonencode(merge(local.runtime_contracts, {
     title       = "remember-result"
     description = "Root publication for remember; runtime owns transport correlation fields."
-    "$ref"      = "#/$defs/ResultPublication"
+    "$ref"      = "#/definitions/RememberResultPublication"
   }))
 }
 
@@ -31,14 +31,31 @@ resource "tama_chain" "remember-result-delivery" {
   name     = "remember-result"
 }
 
-# #11 enables result delivery only after the terminal path is implemented.
+resource "tama_modular_thought" "remember-result-delivery" {
+  chain_id        = tama_chain.remember-result-delivery.id
+  relation        = "result-publication"
+  index           = 0
+  output_class_id = tama_class.remember-result.id
+
+  module {
+    reference  = "tama/agentic/result"
+    parameters = jsonencode({})
+  }
+
+  faculty {
+    queue_id = tama_queue.interactive.id
+    priority = 0
+  }
+}
+
 resource "tama_node" "remember-result-delivery" {
-  count    = 0
   space_id = module.remember.space_id
   class_id = module.remember-result-publication-request.class.id
   chain_id = tama_chain.remember-result-delivery.id
   type     = "reactive"
   on       = "processing"
+
+  depends_on = [tama_modular_thought.remember-result-delivery]
 }
 
 resource "tama_chain" "remember-forward" {

@@ -1,0 +1,14 @@
+{% case data.content %}
+{% when "fixture:recall:empty" %}
+{"operation":"recall","outcome":"empty","claims":[],"sources":[],"indexing":{"pending_count":0,"failed_count":0},"text":"No matching indexed memory was found."}
+{% when "fixture:recall:indexing-pending" %}
+{"operation":"recall","outcome":"indexing_pending","claims":[],"sources":[],"indexing":{"pending_count":1,"failed_count":0},"text":"No indexed evidence is available yet; one memory is still being indexed."}
+{% when "fixture:recall:clarification" %}
+{"operation":"recall","outcome":"clarification_required","question":"Which project do you mean?","candidates":[{"post_id":"01990000-0000-7000-8000-000000000101","title":"Memovee HTTP preference"}],"text":"Which project do you mean?"}
+{% when "fixture:recall:failure" %}
+{"operation":"recall","outcome":"failed","error":{"code":"search_unavailable","message":"Memory search is temporarily unavailable.","retryable":true},"text":"Memory search is temporarily unavailable."}
+{% when "fixture:recall:runtime-failure" %}
+{"operation":"recall","outcome":"empty","claims":[],"sources":[],"indexing":{"pending_count":0,"failed_count":0},"text":"fixture:runtime-failure"}
+{% else %}
+{"operation":"recall","outcome":"answered","claims":[{"text":"For Memovee, use Req for HTTP calls.","post_ids":["01990000-0000-7000-8000-000000000101"]}],"sources":[{"post_id":"01990000-0000-7000-8000-000000000101","title":"Memovee HTTP preference","body_excerpt":"For Memovee, I prefer Req for HTTP calls.","body_hash":"ed3734937cdaa62b790c1f31c9513a1f7a0b53efcfd31f9523c6cac38cdb00a3","kind":"preference","epistemic_status":"user_stated","approval":"unspecified","source":{"channel":"agent","reference":null},"derived_from_post_ids":[],"recorded_at":"2026-09-06T00:00:00Z","occurred_at":null,"effective_at":null,"tags":[{"namespace":"project","key":"memovee","name":"Memovee"}],"score":0.03278688524590164,"indexing_status":"ready"}],"indexing":{"pending_count":0,"failed_count":0},"text":"For Memovee, use Req for HTTP calls. [post:01990000-0000-7000-8000-000000000101]"}
+{% endcase %}

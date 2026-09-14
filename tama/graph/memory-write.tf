@@ -31,6 +31,15 @@ resource "tama_class" "memory-candidate-provider" {
   schema_json = jsonencode(jsondecode(file("${path.module}/memory-write/memory-candidate-provider.v1.json")))
 }
 
+resource "tama_class" "memory-write-result" {
+  space_id = tama_space.memory-write.id
+  schema_json = jsonencode(merge(local.runtime_contracts, {
+    title       = "memory-write-result"
+    description = "Typed terminal remember publication produced before returning to the remember root."
+    "$ref"      = "#/definitions/RememberResultPublication"
+  }))
+}
+
 # Handler foundation; issue #12 supplies the executable chain.
 
 module "memory-write-request" {
