@@ -39,7 +39,7 @@ folder with the same basename as that file:
 `schemas/memory-contract.v1.json` is the shared memory data contract published in
 issue #9. `schemas.tf` loads it for the result classes in both `remember.tf` and
 `recall.tf`, projecting its canonical 2020-12 `$defs` vocabulary and null-codepoint
-patterns to the draft-07/PCRE form accepted by Tama 0.14.0's JsonXema validator.
+patterns to the draft-07/PCRE form accepted by Tama 0.14.2's JsonXema validator.
 `schemas/memory-fixtures.v1.json` holds the examples from #16 and the result
 delivery cases exercised by the Memovee contract tests. The v1 bundle retains its
 gated v1.1 definitions; renaming files does not change contract versions or
@@ -59,7 +59,10 @@ The graph follows the feature-oriented file layout in `memovee-tama`:
 - `memory-write.tf`, `memory-query.tf` and `memory-index.tf` declare component
   spaces, outgoing bridges and shared generation inputs and output classes.
 - `memory-api.tf` and `memory-inference.tf` declare the shared service components;
-  `models.tf` and `queues.tf` hold model and worker configuration.
+  `models.tf` and `queues.tf` hold model and memory-worker configuration. The
+  Terraform root's `queues.tf` explicitly provisions Tama's baseline `scribe`
+  queues, while the child graph owns the `memory-interactive` and `memory-index`
+  `oracle` queues.
 - Files such as `remember-candidate.tf`, `remember-save.tf`, `recall-search.tf`
   and `index-snapshot.tf` keep each handler's request class, chain and node together.
 - `outputs.tf` exposes the public interfaces; it does not construct the graph.
@@ -69,7 +72,7 @@ producers. #12/#13/#15 fill the real remember/index/recall chains. Their product
 entry nodes remain disabled until those chains have complete terminal paths, so
 `memory_interfaces.ready` remains false. The API source space and explicit
 operation-ID lookup interfaces wait for the real backend specification; #13 owns
-the embeddings OpenAPI source. Tama `0.14.0-server` contains the required result,
+the embeddings OpenAPI source. Tama `0.14.2-server` contains the required result,
 trusted-caller, Dispatch and Render runtime baseline.
 
 For an authorized fixture-only live trace, set
@@ -110,6 +113,11 @@ The graph does not add lifecycle scripts or a proxy override. Redis uses AOF,
 the `memovee-memory-redis-data` volume and host URL
 `redis://127.0.0.1:6380/0`; configure the application's Redis connection when
 implementing indexing.
+
+The local Tama container is named `tama-01` and selects both worker roles with
+`NODE_ROLES=scribe=01&oracle=01`. After provisioning or changing queues, recreate
+the Tama container so its boot-time Oban configuration loads the active scribe
+and oracle queues.
 
 Supply the OpenRouter key to Terraform through your local environment:
 

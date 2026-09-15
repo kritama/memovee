@@ -4,7 +4,8 @@ mock_provider "tama" {}
 run "result_publishers_are_configured" {
   command = plan
   variables {
-    memory_openrouter_api_key = "fixture-only-never-a-real-credential"
+    memory_openrouter_api_key      = "fixture-only-never-a-real-credential"
+    memory_result_fixtures_enabled = false
   }
   assert {
     condition     = module.memory.interfaces.result_fixtures_enabled == false

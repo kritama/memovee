@@ -46,3 +46,6 @@ npm-debug.log
 
 # Memovee CLI-owned local integration values and private signing key.
 /.memovee.integration.env
+
+# Local Terraform values (contains secrets).
+.auto.tfvars
