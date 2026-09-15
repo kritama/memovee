@@ -19,10 +19,13 @@ services:
     build:
       context: .
       dockerfile: ./tama-local-ca.Dockerfile
-    image: ghcr.io-upmaru-tama-0.14.0-server-local-ca
+    image: ghcr.io-upmaru-tama-0.14.2-server-local-ca
+    hostname: tama-01
     restart: unless-stopped
     env_file:
       - ./.tama.env
+    environment:
+      NODE_ROLES: "scribe=01&oracle=01"
     depends_on:
       tama-postgres:
         condition: service_healthy
