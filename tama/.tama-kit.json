@@ -59,13 +59,13 @@
   },
   "managedFiles": {
     "tama/.memovee.integration.env": "sha256:27d64280693f521fe3daf4b7d1196423582ffe25e4c1dce0342e4da88c6dbe98",
-    "tama/.tama.env.example": "sha256:c13c62ab100ef80719138e643ed0fa71dd32baa80fe9f071cf7af3c693f32e67",
+    "tama/.tama.env.example": "sha256:57b6eab14aeb23146391f9e11c06ed25206e23ef0134b5c006e4faff039e1179",
     "tama/AGENTS.md": "sha256:c07a3949a39efef431f50a86f97f122da0f3d3661b47c77a910999e5273f277f",
     "tama/Caddyfile": "sha256:300e9c11b635018d59e99e912105cf024d54411e7792dbb6e74367a39e8fcb6b",
     "tama/compose.yaml": "sha256:c4e51bbb7cea1b36a13749442b36cfc0eabb029ebfc4888d840be5e2fff055fc",
     "tama/contracts/mcp-app-provider-v1.json": "sha256:e288ea23cf4998bcae49169baf220f85e8e3d0e953152de27a7cab988f58b84c",
     "tama/main.tf": "sha256:830d4ab9b545bd4917bba681022bc3813d452513e5c66914672fc2a4dd3903bd",
-    "tama/README.md": "sha256:74b5951ed8fa38906af8797a820b63cf43677ba4422e1d37e698a64960ea825b",
+    "tama/README.md": "sha256:c881ab9357d47544b865a423c3fb6b6819d05415c49b76ee1c491fdf7ece58e5",
     "tama/tama-local-ca.Dockerfile": "sha256:0ca92005cc8434a1748cd73975997048847a11167f5aa0f75ad7da92a3dae47a",
     "tama/versions.tf": "sha256:bf830d97c8234e1f439993dc422b3a9004ba4d69a794dd6cd6c988ac7f2acbba"
   }
