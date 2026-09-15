@@ -39,5 +39,6 @@ variable "memory_api_operations" {
 variable "memory_result_fixtures_enabled" {
   type        = bool
   default     = false
+  nullable    = false
   description = "Enables deterministic remember/recall result fixtures for an authorized live integration trace."
 }

@@ -4,8 +4,9 @@ mock_provider "tama" {}
 run "result_publishers_are_configured" {
   command = plan
   variables {
-    memory_openrouter_api_key      = "fixture-only-never-a-real-credential"
-    memory_result_fixtures_enabled = false
+    memory_openrouter_api_key = "fixture-only-never-a-real-credential"
+    # Override local .auto.tfvars with null so Terraform exercises the declared default.
+    memory_result_fixtures_enabled = null
   }
   assert {
     condition     = module.memory.interfaces.result_fixtures_enabled == false
