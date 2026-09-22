@@ -5,8 +5,11 @@ run "unknown_operation_rejected" {
   command = plan
   module { source = "./graph" }
   variables {
-    global_space_id             = "fixture-global"
-    global_schemas              = { forwarding = "fixture-forwarding" }
+    global_space_id = "fixture-global"
+    global_schemas = {
+      forwarding = "fixture-forwarding"
+      tool-call  = "fixture-tool-call"
+    }
     context_metadata_corpus_id  = "fixture-context"
     action_call_json_corpus_id  = "fixture-action"
     openrouter_api_key          = "fixture-only-never-a-real-credential"

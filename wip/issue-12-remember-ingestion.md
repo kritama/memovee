@@ -1,6 +1,6 @@
 # Issue #12: Remember ingestion
 
-Status: Implementation-ready; not yet implemented or applied
+Status: Implemented in source; not planned, applied, restarted, or live-accepted
 
 Branch: `feature/issue-12-remember-ingestion`
 
@@ -36,10 +36,11 @@ description, embed the generated concept, and invoke one Memovee indexing action
 after the entity is processed. Remember does not wait for that background flow.
 
 This document is the implementation authority for issue #12's graph topology,
-retry ownership, and migration sequence. The application request/response
-schemas remain authoritative for the HTTP wire contract. The issue remains
-authoritative for product behavior and fixture intent except where its older
-candidate/status/retry-save design conflicts with the decisions below.
+retry ownership, and migration sequence. Repository instructions and documented
+project conventions supersede this WIP whenever they conflict. The application
+request/response schemas remain authoritative for the HTTP wire contract. The
+issue remains authoritative for product behavior and fixture intent except where
+its older candidate/status/retry-save design conflicts with the decisions below.
 
 ## Scope
 
@@ -398,7 +399,8 @@ even though their nodes are disabled.
 
 ### Phase 2: implement the component before enabling entry
 
-1. Add `tama/graph/prompts/remember/tooling.md`.
+1. Add `tama/graph/memory-write/tooling.md` beside its owning
+   `memory-write.tf` file.
 2. Remove the stale `memory-candidate-provider` class and implement the Tooling
    module/reference in `tama/graph/memory-write.tf`.
 3. Bind the imported `memory_post_create` action and internal memo tool.
@@ -480,9 +482,13 @@ change. The old count of 31 stages is not a contract.
 
 ### Add
 
-- `tama/graph/prompts/remember/tooling.md`
-- handler-local corpora needed to create and validate terminal result shapes
+- `tama/graph/memory-write/tooling.md`
+- `tama/graph/memory-write/remember-tool-result.liquid`
+- `tama/graph/remember-save/remember-save-result.liquid`
+- `tama/graph/remember-clarification/remember-clarification-result.liquid`
+- `tama/graph/remember-invalid-response/remember-invalid-response-result.liquid`
 - native Terraform tests for the production topology and Tooling policy
+- `tama/tests/remember-corpora.exs` for deterministic pinned-runtime corpus fixtures
 
 ### Remove
 
@@ -491,8 +497,10 @@ change. The old count of 31 stages is not a contract.
 - `tama/graph/remember-status.tf`
 - `tama/graph/remember-retry-save.tf`
 
-The exact corpus filenames may follow the owning handler structure, but generic
-cross-handler candidate normalization must not return under another name.
+Every single-owner prompt or corpus must live in the directory whose basename
+matches its owning Terraform file, as listed above. Shared assets alone belong
+in `tama/graph/corpora/`. Generic cross-handler candidate normalization must not
+return under another name.
 
 ## Test plan
 
@@ -613,15 +621,31 @@ snapshot/completion callback pair.
 
 ## Delivery checklist
 
-- [ ] Confirm state addresses before editing/removing graph resources.
-- [ ] Add Tooling prompt, action binding, trusted modifiers, and retry policy.
-- [ ] Add deterministic saved/clarification/failure routing.
-- [ ] Forward every component terminal to root result publication.
-- [ ] Remove candidate/status/retry-save topology.
-- [ ] Update outputs, graph documentation, and stage inventory tests.
-- [ ] Pass focused application tests.
-- [ ] Pass Terraform fmt, validate, and test.
-- [ ] Pass `mix precommit`.
+- [x] Confirm state addresses before editing/removing graph resources.
+- [x] Add Tooling prompt, action binding, trusted modifiers, and retry policy.
+- [x] Add deterministic saved/clarification/failure routing.
+- [x] Forward every component terminal to root result publication.
+- [x] Remove candidate/status/retry-save topology.
+- [x] Update outputs, graph documentation, and stage inventory tests.
+- [x] Pass focused application tests.
+- [x] Pass Terraform fmt, validate, and test.
+- [x] Pass `mix precommit`.
 - [ ] Review the Terraform plan, including all destroys/replacements.
 - [ ] Obtain approval before apply.
 - [ ] Restart Tama and complete live R01-R08 acceptance.
+
+## Source verification
+
+Verified on 2026-09-22 without planning or applying the workspace:
+
+- the focused endpoint, manager, and concurrent-save suite passed 36 tests;
+- `mix precommit` passed 344 tests plus compile, format, and strict Credo;
+- Terraform format and validation passed, and all 7 mock-provider runs passed;
+- the pinned Tama 0.15.0 runtime rendered 13 deterministic corpus fixtures,
+  including create, replay, transport ambiguity, retryable HTTP failure,
+  clarification, malformed types, mismatched identity, and multiple calls.
+
+The current state still owns the obsolete candidate, invalid-candidate, status,
+and retry-save chains/classes. Their removal must remain visible as intentional
+destroy operations in the separately authorized plan review. No plan, apply,
+restart, OpenRouter call, or live R01-R08 trace is claimed here.

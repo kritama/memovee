@@ -11,8 +11,16 @@ run "staged_foundations" {
     error_message = "Scaffolding must not advertise a ready graph."
   }
   assert {
-    condition     = length(module.memory.interfaces.stages) == 31
-    error_message = "Every fixed stage needs an independent handler interface."
+    condition = length(setintersection(
+      toset(keys(module.memory.interfaces.stages)),
+      toset([
+        "remember-candidate",
+        "remember-invalid-candidate",
+        "remember-status",
+        "remember-retry-save"
+      ])
+    )) == 0
+    error_message = "Obsolete remember candidate, status, and retry handlers must stay removed."
   }
   assert {
     condition     = toset(keys(module.memory.interfaces.roots)) == toset(["remember", "recall"])

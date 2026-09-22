@@ -1,0 +1,116 @@
+{% assign receipt = data.payload.data.receipt %}
+{% assign valid_receipt = false %}
+{% if data.kind == "save" and data.name == "memory_post_create" %}
+  {% if data.code == 200 or data.code == 201 %}
+    {% assign valid_status = false %}
+    {% if receipt.indexing_status == "pending" or receipt.indexing_status == "processing" or receipt.indexing_status == "ready" or receipt.indexing_status == "failed" %}
+      {% assign valid_status = true %}
+    {% endif %}
+    {% assign valid_replayed = false %}
+    {% if receipt.replayed == true or receipt.replayed == false %}
+      {% assign valid_replayed = true %}
+    {% endif %}
+    {% assign valid_post_id = false %}
+    {% assign post_id_json = receipt.post_id | json %}
+    {% assign post_id_prefix = post_id_json | slice: 0, 1 %}
+    {% assign post_id_suffix = post_id_json | slice: -1, 1 %}
+    {% if post_id_prefix == '"' and post_id_suffix == '"' %}
+      {% assign post_id = receipt.post_id | downcase %}
+      {% assign post_id_parts = post_id | split: "-" %}
+      {% assign post_id_residue = post_id | remove: "0" | remove: "1" | remove: "2" | remove: "3" | remove: "4" | remove: "5" | remove: "6" | remove: "7" | remove: "8" | remove: "9" | remove: "a" | remove: "b" | remove: "c" | remove: "d" | remove: "e" | remove: "f" | remove: "-" %}
+      {% if post_id.size == 36 and post_id_parts.size == 5 and post_id_parts[0].size == 8 and post_id_parts[1].size == 4 and post_id_parts[2].size == 4 and post_id_parts[3].size == 4 and post_id_parts[4].size == 12 and post_id_residue == "" %}
+        {% assign valid_post_id = true %}
+      {% endif %}
+    {% endif %}
+    {% assign valid_body_hash = false %}
+    {% assign body_hash_json = receipt.body_hash | json %}
+    {% assign body_hash_prefix = body_hash_json | slice: 0, 1 %}
+    {% assign body_hash_suffix = body_hash_json | slice: -1, 1 %}
+    {% if body_hash_prefix == '"' and body_hash_suffix == '"' %}
+      {% assign body_hash = receipt.body_hash | downcase %}
+      {% assign body_hash_residue = body_hash | remove: "0" | remove: "1" | remove: "2" | remove: "3" | remove: "4" | remove: "5" | remove: "6" | remove: "7" | remove: "8" | remove: "9" | remove: "a" | remove: "b" | remove: "c" | remove: "d" | remove: "e" | remove: "f" %}
+      {% if body_hash.size == 64 and body_hash_residue == "" %}
+        {% assign valid_body_hash = true %}
+      {% endif %}
+    {% endif %}
+    {% assign valid_tags = false %}
+    {% assign tag_ids_json = receipt.tag_ids | json %}
+    {% assign tag_ids_prefix = tag_ids_json | slice: 0, 1 %}
+    {% assign tag_ids_suffix = tag_ids_json | slice: -1, 1 %}
+    {% if tag_ids_prefix == "[" and tag_ids_suffix == "]" and receipt.tag_ids.size <= 12 %}
+      {% assign valid_tags = true %}
+      {% for tag_id in receipt.tag_ids %}
+        {% assign tag_json = tag_id | json %}
+        {% assign tag_prefix = tag_json | slice: 0, 1 %}
+        {% assign tag_suffix = tag_json | slice: -1, 1 %}
+        {% if tag_prefix == '"' and tag_suffix == '"' %}
+          {% assign tag = tag_id | downcase %}
+          {% assign tag_parts = tag | split: "-" %}
+          {% assign tag_residue = tag | remove: "0" | remove: "1" | remove: "2" | remove: "3" | remove: "4" | remove: "5" | remove: "6" | remove: "7" | remove: "8" | remove: "9" | remove: "a" | remove: "b" | remove: "c" | remove: "d" | remove: "e" | remove: "f" | remove: "-" %}
+          {% unless tag.size == 36 and tag_parts.size == 5 and tag_parts[0].size == 8 and tag_parts[1].size == 4 and tag_parts[2].size == 4 and tag_parts[3].size == 4 and tag_parts[4].size == 12 and tag_residue == "" %}
+            {% assign valid_tags = false %}
+          {% endunless %}
+        {% else %}
+          {% assign valid_tags = false %}
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+    {% if valid_status and valid_replayed and valid_post_id and valid_body_hash and valid_tags %}
+      {% assign valid_receipt = true %}
+    {% endif %}
+  {% endif %}
+{% endif %}
+{% if valid_receipt %}
+{
+  "operation": "remember",
+  "outcome": "saved",
+  "post_id": {{ receipt.post_id | json }},
+  "indexing_status": {{ receipt.indexing_status | json }},
+  "replayed": {{ receipt.replayed | json }},
+  "text": "Memory saved."
+}
+{% elsif data.code == 0 %}
+{
+  "operation": "remember",
+  "outcome": "failed",
+  "error": {
+    "code": "save_unconfirmed",
+    "message": "The save result could not be confirmed.",
+    "retryable": true
+  },
+  "text": "I could not confirm whether the memory was saved."
+}
+{% elsif data.code == 408 or data.code == 429 or data.code == 500 or data.code == 502 or data.code == 503 or data.code == 504 %}
+{
+  "operation": "remember",
+  "outcome": "failed",
+  "error": {
+    "code": "save_unavailable",
+    "message": "The memory service is temporarily unavailable.",
+    "retryable": true
+  },
+  "text": "The memory could not be saved because the service is temporarily unavailable."
+}
+{% elsif data.code == 200 or data.code == 201 or data.code == nil %}
+{
+  "operation": "remember",
+  "outcome": "failed",
+  "error": {
+    "code": "invalid_tool_result",
+    "message": "The save tool returned an invalid result.",
+    "retryable": false
+  },
+  "text": "The memory could not be saved because the save result was invalid."
+}
+{% else %}
+{
+  "operation": "remember",
+  "outcome": "failed",
+  "error": {
+    "code": "save_rejected",
+    "message": "The memory service rejected the save request.",
+    "retryable": false
+  },
+  "text": "The memory could not be saved."
+}
+{% endif %}

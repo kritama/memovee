@@ -1,0 +1,45 @@
+{% assign call_count = 0 %}
+{% assign tool_response_count = 0 %}
+{% assign matching_response_count = 0 %}
+{% assign call_id = nil %}
+{% assign call_name = nil %}
+{% assign response_code = nil %}
+{% assign response_content = nil %}
+{% for message in data.messages %}
+  {% if message.role == "assistant" %}
+    {% for tool_call in message.tool_calls %}
+      {% assign call_count = call_count | plus: 1 %}
+      {% assign call_id = tool_call.id %}
+      {% assign call_name = tool_call.function.name %}
+    {% endfor %}
+  {% endif %}
+{% endfor %}
+{% for message in data.messages %}
+  {% if message.role == "tool" %}
+    {% assign tool_response_count = tool_response_count | plus: 1 %}
+    {% if message.tool_call_id == call_id and message.name == call_name %}
+      {% assign matching_response_count = matching_response_count | plus: 1 %}
+      {% assign response_code = message.code %}
+      {% assign response_content = message.content %}
+    {% endif %}
+  {% endif %}
+{% endfor %}
+{% assign kind = "invalid" %}
+{% assign error_code = "invalid_tool_result" %}
+{% if call_count == 1 and tool_response_count == 1 and matching_response_count == 1 %}
+  {% if call_name == "memory_post_create" %}
+    {% assign kind = "save" %}
+    {% assign error_code = nil %}
+  {% elsif call_name == "memo" %}
+    {% assign kind = "clarification" %}
+    {% assign error_code = nil %}
+  {% endif %}
+{% endif %}
+{
+  "kind": {{ kind | json }},
+  "code": {{ response_code | json }},
+  "name": {{ call_name | json }},
+  "tool_call_id": {{ call_id | json }},
+  "payload": {% if response_content %}{{ response_content }}{% else %}null{% endif %},
+  "error_code": {{ error_code | json }}
+}

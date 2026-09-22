@@ -17,6 +17,17 @@ terraform -chdir=tama plan
 `terraform test` runs the optional mock-provider checks without deploying anything.
 Applying a reviewed plan requires explicit deployment authorization.
 
+Run the deterministic remember corpus fixtures from a Tama 0.15.0 source checkout
+so they use the same Solid filters as `tama/concepts/render`:
+
+```sh
+TAMA_VAULT_KEY=vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv \
+  mix run --no-start /absolute/path/to/memovee/tama/tests/remember-corpora.exs
+```
+
+The key above is disposable test configuration; never substitute a production key
+in command history.
+
 `tama/versions.tf` pins provider 0.7.0 directly. Base 0.5.6 and `module.global`
 retain their existing addresses. Use Terraform consistently for the tracked
 provider lockfile. Future Tama Kit reruns must preserve this application pin and
@@ -31,24 +42,28 @@ Use lowercase kebab-case names with a version suffix for every JSON schema and
 fixture file: `some-schema.v1.json`. Keep assets used by one Terraform file in a
 folder with the same basename as that file:
 
-- `memory-write/`: memory candidate provider schema.
 - `memory-query/`: query and answer candidate provider schemas.
 - `memory-index/`: description provider schema.
 - `memory-projection/`: projection request schema.
+- `memory-write/`: Tooling prompt and correlated response corpus.
+- `remember-save/`: deterministic save terminal corpus.
+- `remember-clarification/`: deterministic clarification terminal corpus.
+- `remember-invalid-response/`: deterministic invalid-response terminal corpus.
 
 `schemas/memory-contract.v1.json` is the shared memory data contract published in
 issue #9. `schemas.tf` loads it for the result classes in both `remember.tf` and
 `recall.tf`, projecting its canonical 2020-12 `$defs` vocabulary and null-codepoint
-patterns to the draft-07/PCRE form accepted by Tama 0.14.2's JsonXema validator.
+patterns to the draft-07/PCRE form accepted by Tama 0.15.0's JsonXema validator.
 `schemas/memory-fixtures.v1.json` holds the examples from #16 and the result
 delivery cases exercised by the Memovee contract tests. The v1 bundle retains its
 gated v1.1 definitions; renaming files does not change contract versions or
 payloads.
 
-`corpora/` holds shared assets: `generation-input.md` is used by memory write,
-query and index; the result fixture corpora provide deterministic, schema-validated
-terminal outcomes without a model or backend call. Provider schemas wrap the
-domain value for structured model output and are read directly by Terraform.
+`corpora/` holds assets shared by multiple Terraform files and the existing result
+fixtures. `generation-input.md` remains shared by query and index. Single-owner
+prompts and corpora stay beside their owning Terraform file in its basename
+folder. Provider schemas wrap structured model output where later flows require
+it and are read directly by Terraform.
 Backend ownership, payload semantics and idempotency belong in #10's Elixir code
 and tests; Terraform configuration validation cannot enforce them.
 
@@ -63,17 +78,18 @@ The graph follows the feature-oriented file layout in `memovee-tama`:
   Terraform root's `queues.tf` explicitly provisions Tama's baseline `scribe`
   queues, while the child graph owns the `memory-interactive` and `memory-index`
   `oracle` queues.
-- Files such as `remember-candidate.tf`, `remember-save.tf`, `recall-search.tf`
+- Files such as `remember-save.tf`, `remember-clarification.tf`, `recall-search.tf`
   and `index-snapshot.tf` keep each handler's request class, chain and node together.
 - `outputs.tf` exposes the public interfaces; it does not construct the graph.
 
 #11 supplies active root result publishers plus test-gated deterministic component
-producers. #12/#13/#15 fill the real remember/index/recall chains. Their production
-entry nodes remain disabled until those chains have complete terminal paths, so
-`memory_interfaces.ready` remains false. The API source space and explicit
-operation-ID lookup interfaces wait for the real backend specification; #13 owns
-the embeddings OpenAPI source. Tama `0.14.2-server` contains the required result,
-trusted-caller, Dispatch and Render runtime baseline.
+producers. #12 implements the real remember chain and enables its production entry
+nodes only when a specification, source slug, and `memory_post_create` operation
+are configured. #13 and #15 still own indexing and recall, so
+`memory_interfaces.ready` remains false while `remember_ready` reports the narrower
+configuration state. #13 owns the embeddings OpenAPI source. Tama `0.15.0-server`
+contains the required Tooling recovery, result, trusted-modifier, Dispatch, and
+Render runtime baseline.
 
 For an authorized fixture-only live trace, set
 `TF_VAR_memory_result_fixtures_enabled=true`. This temporarily routes root messages
@@ -88,9 +104,11 @@ Inference uses OpenRouter's `https://openrouter.ai/api/v1/chat/completions`
 endpoint with model `z-ai/glm-5.3-flash`, following the existing `memovee-tama`
 integration pattern. Record the actual served model/provider in live evaluations.
 OpenRouter's [model reference](https://openrouter.ai/z-ai/glm-5.3-flash) lists JSON output support without JSON-schema
-enforcement. Generation consumers must validate candidates and apply the bounded
-repair/failure behavior before any write; verify the runtime's output-format
-compatibility before enabling those chains.
+enforcement. Remember therefore requires one serial Tooling call, validates the
+correlated persisted tool response, and exposes only deterministic schema-valid
+terminals. Its one exact-request POST retry is owned by Tooling. Query and index
+generation consumers must likewise validate future provider output; verify live
+provider behavior before accepting those chains.
 See the [OpenRouter API guide](https://openrouter.ai/docs/quickstart).
 
 Manage local services directly with Docker Compose and Mix. Memovee owns

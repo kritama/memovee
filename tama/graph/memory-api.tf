@@ -21,10 +21,18 @@ variable "memory_api_operations" {
   validation {
     condition = length(setsubtract(var.memory_api_operations, toset([
       "memory_post_create",
-      "memory_search", "memory_projection_snapshot", "memory_projection_complete"
+      "memory_search", "memory_index_upsert"
     ]))) == 0
     error_message = "Only explicit Memory v1 operation IDs may be resolved."
   }
+}
+
+locals {
+  remember_enabled = (
+    var.memory_api_specification_id != null &&
+    var.memory_api_source_slug != null &&
+    contains(var.memory_api_operations, "memory_post_create")
+  )
 }
 data "tama_source" "memory_api" {
   count            = var.memory_api_specification_id != null && var.memory_api_source_slug != null ? 1 : 0

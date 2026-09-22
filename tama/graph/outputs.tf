@@ -16,28 +16,10 @@ output "interfaces" {
       recall   = module.recall.schemas
     }
     stages = {
-      "remember-candidate" = {
-        class_id = module.remember-candidate-request.class.id
-        chain_id = tama_chain.remember-candidate.id
-        relation = "candidate"
-        queue_id = tama_queue.interactive.id
-      }
       "remember-save" = {
         class_id = module.remember-save-request.class.id
         chain_id = tama_chain.remember-save.id
         relation = "save"
-        queue_id = tama_queue.interactive.id
-      }
-      "remember-status" = {
-        class_id = module.remember-status-request.class.id
-        chain_id = tama_chain.remember-status.id
-        relation = "status"
-        queue_id = tama_queue.interactive.id
-      }
-      "remember-retry-save" = {
-        class_id = module.remember-retry-save-request.class.id
-        chain_id = tama_chain.remember-retry-save.id
-        relation = "retry-save"
         queue_id = tama_queue.interactive.id
       }
       "remember-receipt" = {
@@ -62,12 +44,6 @@ output "interfaces" {
         class_id = module.remember-invalid-response-request.class.id
         chain_id = tama_chain.remember-invalid-response.id
         relation = "invalid-response"
-        queue_id = tama_queue.interactive.id
-      }
-      "remember-invalid-candidate" = {
-        class_id = module.remember-invalid-candidate-request.class.id
-        chain_id = tama_chain.remember-invalid-candidate.id
-        relation = "invalid-candidate"
         queue_id = tama_queue.interactive.id
       }
       "remember-save-unconfirmed" = {
@@ -187,7 +163,7 @@ output "interfaces" {
       "memory-write" = {
         class_id = module.memory-write-request.class.id
         chain_id = tama_chain.memory-write.id
-        relation = "candidate"
+        relation = "remember-tooling"
         queue_id = tama_queue.interactive.id
       }
       "memory-query" = {
@@ -224,6 +200,7 @@ output "interfaces" {
     action_call_json_corpus_id = var.action_call_json_corpus_id
     completion_model_id        = module.inference.model_ids["z-ai/glm-5.3-flash"]
     result_fixtures_enabled    = var.enable_result_fixtures
+    remember_ready             = local.remember_enabled
     ready                      = false
   }
 }
