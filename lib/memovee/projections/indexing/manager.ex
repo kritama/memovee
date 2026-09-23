@@ -4,7 +4,6 @@ defmodule Memovee.Projections.Indexing.Manager do
   import Ecto.Changeset
   alias Ecto.Multi
   alias Jason.OrderedObject
-  alias Memovee.Accounts.Actor
   alias Memovee.Memory.{Post, Scope, Tag, Tagging}
   alias Memovee.Projections.Indexing
   alias Memovee.Projections.Indexing.Worker
@@ -116,39 +115,41 @@ defmodule Memovee.Projections.Indexing.Manager do
   def worker_transition(_changes), do: {:error, %Eventful.Error{code: :worker_not_implemented}}
 
   def invalidate_transition({changeset, event_changeset}) do
-    actor_id = get_assoc(event_changeset, :actor, :struct).id
-    configured_id = Application.get_env(:memovee, :memory_tama_actor_id)
+    actor = get_assoc(event_changeset, :actor, :struct)
 
-    if actor_id == configured_id and
-         Repo.exists?(
-           from actor in Actor,
-             where: actor.id == ^actor_id and actor.current_state == "active"
-         ) do
-      Ecto.Multi.new()
-      |> Ecto.Multi.run(:actor, fn repo, _ -> lock_service(repo, actor_id) end)
-      |> Ecto.Multi.run(:revision, fn repo, _ -> superseded_revision(repo, changeset.data) end)
-      |> Ecto.Multi.insert(:event, event_changeset)
-      |> Ecto.Multi.update(:resource, changeset, stale_error_field: :current_state)
-      |> Repo.transaction()
-      |> case do
-        {:ok, %{event: event, resource: resource}} ->
-          {:ok, %Eventful.Transition{event: event, resource: resource}}
+    Ecto.Multi.new()
+    |> Ecto.Multi.run(:authorization, fn repo, _ ->
+      authorize_invalidation(repo, actor, changeset.data)
+    end)
+    |> Ecto.Multi.run(:revision, fn repo, _ -> superseded_revision(repo, changeset.data) end)
+    |> Ecto.Multi.insert(:event, event_changeset)
+    |> Ecto.Multi.update(:resource, changeset, stale_error_field: :current_state)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{event: event, resource: resource}} ->
+        {:ok, %Eventful.Transition{event: event, resource: resource}}
 
-        {:error, step, error, _} ->
-          {:error, %Eventful.Error{code: step, message: error}}
-      end
-    else
-      {:error, %Eventful.Error{code: :forbidden}}
+      {:error, :authorization, :forbidden, _} ->
+        {:error, %Eventful.Error{code: :forbidden}}
+
+      {:error, step, error, _} ->
+        {:error, %Eventful.Error{code: step, message: error}}
     end
   end
 
-  defp lock_service(repo, actor_id) do
-    actor = repo.one(from actor in Actor, where: actor.id == ^actor_id, lock: "FOR SHARE")
-
-    if actor && actor.current_state == "active" &&
-         actor_id == Application.get_env(:memovee, :memory_tama_actor_id),
-       do: {:ok, actor},
-       else: {:error, :forbidden}
+  defp authorize_invalidation(repo, actor, projection) do
+    with %Indexing{} = current <- repo.get(Indexing, projection.id),
+         %Post{} = post <- repo.get(Post, current.post_id),
+         {:ok, scope} <-
+           Scope.resolve(actor, %{
+             "context" => %{"actor_id" => post.owner_actor_id, "origin_identifier" => post.id}
+           }),
+         {:ok, scope} <- Scope.refresh(scope),
+         true <- scope.owner.id == post.owner_actor_id do
+      {:ok, post}
+    else
+      _ -> {:error, :forbidden}
+    end
   end
 
   defp superseded_revision(repo, projection) do

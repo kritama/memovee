@@ -2,7 +2,7 @@ defmodule Memovee.Memory.ConcurrentSaveTest do
   use ExUnit.Case, async: false
   import Ecto.Query
   alias Ecto.Adapters.SQL.Sandbox
-  alias Memovee.Accounts.Actor
+  alias Memovee.Accounts.{Actor, Relationship}
   alias Memovee.Memory.{Post, Scope, Tag, Tagging}
   alias Memovee.Projections.Indexing
   alias Memovee.Repo
@@ -19,14 +19,12 @@ defmodule Memovee.Memory.ConcurrentSaveTest do
             })
           )
 
+        Repo.insert!(Relationship.owner_changeset(%Relationship{}, owner, service))
+
         {owner, service}
       end)
 
-    previous = Application.get_env(:memovee, :memory_tama_actor_id)
-    Application.put_env(:memovee, :memory_tama_actor_id, service.id)
-
     on_exit(fn ->
-      Application.put_env(:memovee, :memory_tama_actor_id, previous)
       Sandbox.unboxed_run(Repo, fn -> cleanup(owner, service) end)
     end)
 
@@ -104,6 +102,11 @@ defmodule Memovee.Memory.ConcurrentSaveTest do
     Repo.delete_all(from job in Indexing, where: job.owner_actor_id == ^owner.id)
     Repo.delete_all(from post in Post, where: post.owner_actor_id == ^owner.id)
     Repo.delete_all(from tag in Tag, where: tag.owner_actor_id == ^owner.id)
+
+    Repo.delete_all(
+      from relationship in Relationship, where: relationship.target_actor_id == ^service.id
+    )
+
     Repo.delete_all(from actor in Actor, where: actor.id in ^[owner.id, service.id])
   end
 end

@@ -19,7 +19,7 @@ services:
     build:
       context: .
       dockerfile: ./tama-local-ca.Dockerfile
-    image: ghcr.io-upmaru-tama-0.14.2-server-local-ca
+    image: ghcr.io-upmaru-tama-0.15.0-server-local-ca
     hostname: tama-01
     restart: unless-stopped
     env_file:

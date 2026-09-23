@@ -1,0 +1,27 @@
+{% assign question = "" %}
+{% assign question_json = data.payload.summary | json %}
+{% assign question_prefix = question_json | slice: 0, 1 %}
+{% assign question_suffix = question_json | slice: -1, 1 %}
+{% if question_prefix == '"' and question_suffix == '"' %}
+  {% assign question = data.payload.summary | strip %}
+{% endif %}
+{% if data.kind == "clarification" and data.name == "memo" and data.code == 200 and data.payload.target == "response" and data.payload.reason == "clarification_required" and question != "" and question.size <= 400 %}
+{
+  "operation": "remember",
+  "outcome": "clarification_required",
+  "question": {{ question | json }},
+  "candidates": [],
+  "text": "I need one clarification before saving this."
+}
+{% else %}
+{
+  "operation": "remember",
+  "outcome": "failed",
+  "error": {
+    "code": "invalid_tool_result",
+    "message": "The clarification tool returned an invalid result.",
+    "retryable": false
+  },
+  "text": "The memory could not be saved because the clarification result was invalid."
+}
+{% endif %}

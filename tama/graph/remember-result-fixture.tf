@@ -1,5 +1,5 @@
-# Deterministic, test-gated path used to prove result publication before #12
-# supplies real Tooling/save outcomes. Production keeps the entry nodes absent.
+# Deterministic, test-gated path retained as a root result-publication regression.
+# Production keeps these fixture entry nodes absent.
 resource "tama_class_corpus" "remember-result-fixture-message" {
   class_id = module.remember.schemas["user-message"].id
   name     = "Remember result fixture"

@@ -1,5 +1,5 @@
 //
-// Tama 0.14.2 baseline queues for the scribe worker role.
+// Tama 0.15.0 baseline queues for the scribe worker role.
 //
 
 resource "tama_queue" "default" {

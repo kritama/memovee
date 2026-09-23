@@ -93,12 +93,16 @@ resource "tama_thought_path" "remember-forward" {
   depends_on      = [tama_space_bridge.remember-to-memory-write]
 }
 
-# Enable only when the component chain and root result path are complete.
 resource "tama_node" "remember-forward" {
-  count    = 0
+  count    = local.remember_enabled ? 1 : 0
   space_id = module.remember.space_id
   class_id = module.remember.schemas["user-message"].id
   chain_id = tama_chain.remember-forward.id
   type     = "reactive"
   on       = "processing"
+
+  depends_on = [
+    tama_node.memory-write,
+    tama_thought_path.remember-forward
+  ]
 }

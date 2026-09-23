@@ -1,5 +1,17 @@
 # Mock-provider plans are static evidence only. No remote resources or secrets.
 mock_provider "tama" {}
+mock_provider "http" {
+  mock_data "http" {
+    defaults = {
+      response_body = jsonencode({
+        openapi = "3.0.0"
+        info    = { title = "Memovee Tama API", version = "0.1.2" }
+        servers = [{ url = "https://app.localhost" }]
+        paths   = {}
+      })
+    }
+  }
+}
 
 run "staged_foundations" {
   command = plan
@@ -11,8 +23,16 @@ run "staged_foundations" {
     error_message = "Scaffolding must not advertise a ready graph."
   }
   assert {
-    condition     = length(module.memory.interfaces.stages) == 31
-    error_message = "Every fixed stage needs an independent handler interface."
+    condition = length(setintersection(
+      toset(keys(module.memory.interfaces.stages)),
+      toset([
+        "remember-candidate",
+        "remember-invalid-candidate",
+        "remember-status",
+        "remember-retry-save"
+      ])
+    )) == 0
+    error_message = "Obsolete remember candidate, status, and retry handlers must stay removed."
   }
   assert {
     condition     = toset(keys(module.memory.interfaces.roots)) == toset(["remember", "recall"])

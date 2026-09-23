@@ -5,32 +5,26 @@ defmodule Memovee.Memory.Scope.Manager do
   alias Memovee.Memory.{Context, Scope}
   alias Memovee.Repo
 
-  def resolve_service(actor, attrs) do
+  def resolve_ingestion(actor, attrs) do
     with {:ok, scope} <- resolve(actor, attrs) do
-      if scope.service?, do: {:ok, scope}, else: {:error, :forbidden}
+      if scope.structured?, do: {:ok, scope}, else: {:error, :invalid_context}
     end
   end
 
   def resolve(%Actor{id: token_id}, attrs) do
-    service? = token_id == Application.get_env(:memovee, :memory_tama_actor_id)
-    context = Map.get(attrs, "context")
-
-    cond do
-      Map.has_key?(attrs, "context") and not service? -> {:error, :forbidden_context}
-      service? -> resolve_context(token_id, context)
-      true -> resolve_actor(token_id, service?, context)
+    case Map.fetch(attrs, "context") do
+      {:ok, context} -> resolve_context(token_id, context)
+      :error -> resolve_actor(token_id, nil)
     end
   end
 
   def refresh(%Scope{} = scope) do
     if Repo.in_transaction?(), do: lock_principals(scope)
 
-    with %Actor{current_state: "active"} <- Repo.get(Actor, scope.token_actor_id),
-         true <- scope.service? or scope.token_actor_id == scope.actor.id,
-         true <-
-           not scope.service? or
-             scope.token_actor_id == Application.get_env(:memovee, :memory_tama_actor_id),
+    with {:ok, _token_actor, token_owner} <- owner(scope.token_actor_id),
+         true <- scope.structured? or scope.token_actor_id == scope.actor.id,
          {:ok, actor, owner} <- owner(scope.actor.id),
+         true <- token_owner.id == owner.id,
          true <- owner.id == scope.owner.id do
       {:ok, %{scope | actor: actor, owner: owner}}
     else
@@ -40,7 +34,7 @@ defmodule Memovee.Memory.Scope.Manager do
 
   defp resolve_context(token_id, attrs) do
     case %Context{} |> Context.changeset(attrs) |> Ecto.Changeset.apply_action(:validate) do
-      {:ok, context} -> resolve_actor(token_id, true, context)
+      {:ok, context} -> resolve_actor(token_id, context)
       {:error, _changeset} -> {:error, :invalid_context}
     end
   end
@@ -50,18 +44,19 @@ defmodule Memovee.Memory.Scope.Manager do
     Repo.all(from actor in Actor, where: actor.id in ^ids, order_by: actor.id, lock: "FOR SHARE")
   end
 
-  defp resolve_actor(token_id, service?, context) do
-    actor_id = if service?, do: context.actor_id, else: token_id
+  defp resolve_actor(token_id, context) do
+    actor_id = if context, do: context.actor_id, else: token_id
 
-    with %Actor{current_state: "active"} <- Repo.get(Actor, token_id),
-         {:ok, actor, owner} <- owner(actor_id) do
+    with {:ok, _token_actor, token_owner} <- owner(token_id),
+         {:ok, actor, owner} <- owner(actor_id),
+         true <- token_owner.id == owner.id do
       {:ok,
        %Scope{
          actor: actor,
          owner: owner,
          token_actor_id: token_id,
-         service?: service?,
-         origin_identifier: if(service?, do: context.origin_identifier)
+         structured?: not is_nil(context),
+         origin_identifier: if(context, do: context.origin_identifier)
        }}
     else
       _ -> {:error, :forbidden}

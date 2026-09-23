@@ -17,6 +17,15 @@ terraform -chdir=tama plan
 `terraform test` runs the optional mock-provider checks without deploying anything.
 Applying a reviewed plan requires explicit deployment authorization.
 
+The deterministic remember corpus tests run in the Memovee ExUnit suite and in
+CI. They use Tama 0.15.0's pinned Solid version and its JSON filter behavior:
+
+```sh
+mix test test/tama/remember_corpora_test.exs
+```
+
+`mix precommit` and the CI `mix test` step run these tests automatically.
+
 `tama/versions.tf` pins provider 0.7.0 directly. Base 0.5.6 and `module.global`
 retain their existing addresses. Use Terraform consistently for the tracked
 provider lockfile. Future Tama Kit reruns must preserve this application pin and
@@ -31,24 +40,28 @@ Use lowercase kebab-case names with a version suffix for every JSON schema and
 fixture file: `some-schema.v1.json`. Keep assets used by one Terraform file in a
 folder with the same basename as that file:
 
-- `memory-write/`: memory candidate provider schema.
 - `memory-query/`: query and answer candidate provider schemas.
 - `memory-index/`: description provider schema.
 - `memory-projection/`: projection request schema.
+- `memory-write/`: Tooling prompt and correlated response corpus.
+- `remember-save/`: deterministic save terminal corpus.
+- `remember-clarification/`: deterministic clarification terminal corpus.
+- `remember-invalid-response/`: deterministic invalid-response terminal corpus.
 
 `schemas/memory-contract.v1.json` is the shared memory data contract published in
 issue #9. `schemas.tf` loads it for the result classes in both `remember.tf` and
 `recall.tf`, projecting its canonical 2020-12 `$defs` vocabulary and null-codepoint
-patterns to the draft-07/PCRE form accepted by Tama 0.14.2's JsonXema validator.
+patterns to the draft-07/PCRE form accepted by Tama 0.15.0's JsonXema validator.
 `schemas/memory-fixtures.v1.json` holds the examples from #16 and the result
 delivery cases exercised by the Memovee contract tests. The v1 bundle retains its
 gated v1.1 definitions; renaming files does not change contract versions or
 payloads.
 
-`corpora/` holds shared assets: `generation-input.md` is used by memory write,
-query and index; the result fixture corpora provide deterministic, schema-validated
-terminal outcomes without a model or backend call. Provider schemas wrap the
-domain value for structured model output and are read directly by Terraform.
+`corpora/` holds assets shared by multiple Terraform files and the existing result
+fixtures. `generation-input.md` remains shared by query and index. Single-owner
+prompts and corpora stay beside their owning Terraform file in its basename
+folder. Provider schemas wrap structured model output where later flows require
+it and are read directly by Terraform.
 Backend ownership, payload semantics and idempotency belong in #10's Elixir code
 and tests; Terraform configuration validation cannot enforce them.
 
@@ -63,17 +76,45 @@ The graph follows the feature-oriented file layout in `memovee-tama`:
   Terraform root's `queues.tf` explicitly provisions Tama's baseline `scribe`
   queues, while the child graph owns the `memory-interactive` and `memory-index`
   `oracle` queues.
-- Files such as `remember-candidate.tf`, `remember-save.tf`, `recall-search.tf`
+- Files such as `remember-save.tf`, `remember-clarification.tf`, `recall-search.tf`
   and `index-snapshot.tf` keep each handler's request class, chain and node together.
 - `outputs.tf` exposes the public interfaces; it does not construct the graph.
 
 #11 supplies active root result publishers plus test-gated deterministic component
-producers. #12/#13/#15 fill the real remember/index/recall chains. Their production
-entry nodes remain disabled until those chains have complete terminal paths, so
-`memory_interfaces.ready` remains false. The API source space and explicit
-operation-ID lookup interfaces wait for the real backend specification; #13 owns
-the embeddings OpenAPI source. Tama `0.14.2-server` contains the required result,
-trusted-caller, Dispatch and Render runtime baseline.
+producers. #12 implements the real remember chain. Terraform fetches
+`https://app.localhost/tama/openapi` and owns its `tama_specification`, following
+the `memovee-tama` pattern. The specification endpoint is that document URL;
+Tama derives the API source endpoint (`https://app.localhost`) from the
+document's `servers` entry. The specification version tracks Memovee's app
+version in `mix.exs` (`0.1.2`), not the OpenAPI format version. Production
+remember entry nodes require the source slug, `memory_post_create` operation,
+and both service credential fields. #13 and #15 still own indexing and recall, so
+`memory_interfaces.ready` remains false while `remember_ready` reports the narrower
+configuration state.
+#13 owns the embeddings OpenAPI source. Tama `0.15.0-server`
+contains the required Tooling recovery, result, trusted-modifier, Dispatch, and
+Render runtime baseline.
+
+Memovee's `/tama/memory/posts` accepts an active Agent API token as
+`Authorization: Bearer <client-id>.<client-secret>`; these are not OAuth client
+credentials. The imported OpenAPI describes an `Authorization` header API key
+with Tama's `x-bearer-format: bearer` extension because Tama 0.15.0 does not
+build an outbound header from a standard HTTP-bearer security scheme. The
+`bearer_auth` source identity combines the two values as its `api_key` and
+validates them with authenticated, read-only `GET /tama/health`. That endpoint
+returns 200 for any active Agent with a valid API credential. A memory write
+also requires a valid context Actor under the same active user owner as the
+credential's Agent. The remember tool waits for an active identity
+before it can be provisioned. Supply `memory_api_client_id` and the sensitive
+`memory_api_client_secret` through ignored local tfvars or private Terraform
+environment variables. Never commit the values, and protect Terraform state
+and saved plans because they can contain the secret.
+
+The specification was previously created outside Terraform and is already
+adopted at `module.memory.tama_specification.memory_api` in the existing local
+state; do not import it again. Review the resulting plan for specification and
+protocol changes, including the API version and security-scheme update. A fresh
+environment does not need this adoption step.
 
 For an authorized fixture-only live trace, set
 `TF_VAR_memory_result_fixtures_enabled=true`. This temporarily routes root messages
@@ -88,9 +129,11 @@ Inference uses OpenRouter's `https://openrouter.ai/api/v1/chat/completions`
 endpoint with model `z-ai/glm-5.3-flash`, following the existing `memovee-tama`
 integration pattern. Record the actual served model/provider in live evaluations.
 OpenRouter's [model reference](https://openrouter.ai/z-ai/glm-5.3-flash) lists JSON output support without JSON-schema
-enforcement. Generation consumers must validate candidates and apply the bounded
-repair/failure behavior before any write; verify the runtime's output-format
-compatibility before enabling those chains.
+enforcement. Remember therefore requires one serial Tooling call, validates the
+correlated persisted tool response, and exposes only deterministic schema-valid
+terminals. Its one exact-request POST retry is owned by Tooling. Query and index
+generation consumers must likewise validate future provider output; verify live
+provider behavior before accepting those chains.
 See the [OpenRouter API guide](https://openrouter.ai/docs/quickstart).
 
 Manage local services directly with Docker Compose and Mix. Memovee owns
@@ -172,14 +215,17 @@ and submits it under `post`, with the runtime-owned `context` alongside it.
 }
 ```
 
-The save endpoint accepts only the configured Tama service. Context injection remains
+The save endpoint accepts any active Agent credential for a context Actor under
+the same active user owner. Context injection remains
 at `/body/context/actor_id` and `/body/context/origin_identifier`; generated fields
 are nested under `/body/post`.
 
-Set `MEMOVEE_MEMORY_TAMA_ACTOR_ID` to the dedicated service Actor's UUID and supply
-that Actor's existing API credential to the graph API source. Agents submit memories
-through `remember`; the service supplies `context.actor_id` and
-`context.origin_identifier` on their behalf. Ordinary API credentials cannot save directly.
+Supply an Agent's API credential to the graph API source. Agents submit memories
+through `remember`; Tama supplies `context.actor_id` and
+`context.origin_identifier` on their behalf. The configured source credential
+can write only for Actors with the same user owner. Serving agents owned by
+different users requires credentials scoped to each owner; a single shared
+source identity cannot cross that boundary.
 
 The Post stores the trusted origin identifier. A transaction lock and unique index
 on owner/origin ensure concurrent retries create one Post, its tags, search projection

@@ -186,7 +186,7 @@ defmodule Memovee.Memory.Projection.Manager do
 
     with %Projection{} <- projection,
          %Post{} = post <- Repo.get(Post, projection.post_id),
-         {:ok, scope} <- Scope.resolve(actor, transition_context(actor, post)),
+         {:ok, scope} <- Scope.resolve(actor, transition_context(post)),
          {:ok, scope} <- Scope.refresh(scope),
          true <- post.owner_actor_id == scope.owner.id do
       {:ok, post}
@@ -195,11 +195,8 @@ defmodule Memovee.Memory.Projection.Manager do
     end
   end
 
-  defp transition_context(actor, post) do
-    if actor.id == Application.get_env(:memovee, :memory_tama_actor_id),
-      do: %{"context" => %{"actor_id" => post.owner_actor_id, "origin_identifier" => post.id}},
-      else: %{}
-  end
+  defp transition_context(post),
+    do: %{"context" => %{"actor_id" => post.owner_actor_id, "origin_identifier" => post.id}}
 
   defp parameter(%Eventful.Metadata{parameters: parameters}, key) do
     Map.get(parameters, key) || Map.get(parameters, Atom.to_string(key))
