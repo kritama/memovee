@@ -17,16 +17,14 @@ terraform -chdir=tama plan
 `terraform test` runs the optional mock-provider checks without deploying anything.
 Applying a reviewed plan requires explicit deployment authorization.
 
-Run the deterministic remember corpus fixtures from a Tama 0.15.0 source checkout
-so they use the same Solid filters as `tama/concepts/render`:
+The deterministic remember corpus tests run in the Memovee ExUnit suite and in
+CI. They use Tama 0.15.0's pinned Solid version and its JSON filter behavior:
 
 ```sh
-TAMA_VAULT_KEY=vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv \
-  mix run --no-start /absolute/path/to/memovee/tama/tests/remember-corpora.exs
+mix test test/tama/remember_corpora_test.exs
 ```
 
-The key above is disposable test configuration; never substitute a production key
-in command history.
+`mix precommit` and the CI `mix test` step run these tests automatically.
 
 `tama/versions.tf` pins provider 0.7.0 directly. Base 0.5.6 and `module.global`
 retain their existing addresses. Use Terraform consistently for the tracked

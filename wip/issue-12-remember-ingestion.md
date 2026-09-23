@@ -488,7 +488,7 @@ change. The old count of 31 stages is not a contract.
 - `tama/graph/remember-clarification/remember-clarification-result.liquid`
 - `tama/graph/remember-invalid-response/remember-invalid-response-result.liquid`
 - native Terraform tests for the production topology and Tooling policy
-- `tama/tests/remember-corpora.exs` for deterministic pinned-runtime corpus fixtures
+- `test/tama/remember_corpora_test.exs` for automated deterministic corpus fixtures
 
 ### Remove
 
@@ -644,6 +644,10 @@ Verified on 2026-09-22 without planning or applying the workspace:
 - the pinned Tama 0.15.0 runtime rendered 13 deterministic corpus fixtures,
   including create, replay, transport ambiguity, retryable HTTP failure,
   clarification, malformed types, mismatched identity, and multiple calls.
+
+The corpus fixtures are now conventional ExUnit tests using the same Solid
+version and JSON filter behavior as Tama 0.15.0. They run in `mix precommit`
+and CI through the existing `mix test` step.
 
 The current state still owns the obsolete candidate, invalid-candidate, status,
 and retry-save chains/classes. Their removal must remain visible as intentional

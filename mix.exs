@@ -108,6 +108,7 @@ defmodule Memovee.MixProject do
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:lazy_html, ">= 0.1.0", only: :test},
       {:json_xema, "~> 0.6.4", only: :test},
+      {:solid, "== 1.3.3", only: :test},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
