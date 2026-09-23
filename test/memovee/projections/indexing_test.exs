@@ -4,13 +4,10 @@ defmodule Memovee.Projections.IndexingTest do
   alias Memovee.Memory.{Post, Scope}
   alias Memovee.Projections.Indexing
 
-  test "job declarations require the configured active service and cannot claim readiness yet" do
+  test "job invalidation permits same-owner actors but cannot claim readiness yet" do
     owner = user_fixture().actor
     agent = agent_fixture(owner)
     service = agent_fixture(owner)
-    previous = Application.get_env(:memovee, :memory_tama_actor_id)
-    Application.put_env(:memovee, :memory_tama_actor_id, service.id)
-    on_exit(fn -> Application.put_env(:memovee, :memory_tama_actor_id, previous) end)
     {:ok, scope} = Scope.resolve(agent, %{})
     {:ok, result} = Post.Manager.create(scope, %{"body" => "source"})
     job = Repo.get_by!(Indexing, post_id: result.post.id)
@@ -21,7 +18,13 @@ defmodule Memovee.Projections.IndexingTest do
     assert {:error, %Eventful.Error{code: :worker_not_implemented}} =
              Eventful.Transit.perform(job, service, "claim", [])
 
+    foreign_owner = user_fixture().actor
+    foreign_agent = agent_fixture(foreign_owner)
+
     assert {:error, %Eventful.Error{code: :forbidden}} =
+             Eventful.Transit.perform(job, foreign_agent, "invalidate", [])
+
+    assert {:error, %Eventful.Error{code: :revision, message: :current_revision}} =
              Eventful.Transit.perform(job, agent, "invalidate", [])
 
     assert {:error, %Eventful.Error{code: :revision, message: :current_revision}} =
@@ -35,10 +38,10 @@ defmodule Memovee.Projections.IndexingTest do
 
     assert {:ok, _} = Post.Manager.update(scope, result.post, %{body: "revised"})
 
-    assert {:ok, %{resource: obsolete}} = Eventful.Transit.perform(job, service, "invalidate", [])
+    assert {:ok, %{resource: obsolete}} = Eventful.Transit.perform(job, agent, "invalidate", [])
     assert obsolete.current_state == "obsolete"
     event = Repo.one!(Indexing.Event)
-    assert event.actor_id == service.id
+    assert event.actor_id == agent.id
     assert <<_::48, 7::4, _::76>> = Ecto.UUID.dump!(event.id)
   end
 

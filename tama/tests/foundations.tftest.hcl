@@ -1,5 +1,17 @@
 # Mock-provider plans are static evidence only. No remote resources or secrets.
 mock_provider "tama" {}
+mock_provider "http" {
+  mock_data "http" {
+    defaults = {
+      response_body = jsonencode({
+        openapi = "3.0.0"
+        info    = { title = "Memovee Tama API", version = "0.1.2" }
+        servers = [{ url = "https://app.localhost" }]
+        paths   = {}
+      })
+    }
+  }
+}
 
 run "staged_foundations" {
   command = plan

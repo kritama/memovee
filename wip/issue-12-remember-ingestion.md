@@ -1,6 +1,6 @@
 # Issue #12: Remember ingestion
 
-Status: Implemented in source; not planned, applied, restarted, or live-accepted
+Status: Implemented in source; plan reviewed; not applied, restarted, or live-accepted
 
 Branch: `feature/issue-12-remember-ingestion`
 
@@ -447,12 +447,31 @@ change. The old count of 31 stages is not a contract.
 
 ### Phase 5: plan and deploy separately
 
-1. Import or verify the real memory API specification from `/tama/openapi`.
-2. Wait for the specification to become complete.
-3. Verify the source is active, its identity/credential is valid, and the
-   imported operation is exactly `memory_post_create`.
-4. Set the specification ID, source slug, and operation-set variables without
-   committing secrets.
+1. Let Terraform fetch the real memory API OpenAPI document from
+   `https://app.localhost/tama/openapi` and register it with
+   `tama_specification`, following `memovee-tama/interface.tf`. On a local Tama
+   state where the specification was already created outside Terraform, reuse
+   its adopted `module.memory.tama_specification.memory_api` state address; do
+   not import it again. Keep the specification
+   endpoint at the document URL; Tama derives the API source endpoint from the
+   OpenAPI `servers` entry. Set the specification version to the Memovee app
+   version in `mix.exs`, not the OpenAPI format version.
+2. Wait for the Terraform-managed specification to become complete.
+3. Configure the `bearer_auth` source identity with an Agent API token. The
+   write endpoint permits context Actors under the same active user owner as
+   that Agent; there is no single-Actor environment allowlist. A shared source
+   identity cannot serve Actors owned by different users. Tama 0.15.0 needs
+   the imported OpenAPI to describe an
+   `Authorization` header API key with `x-bearer-format: bearer`; its identity
+   `api_key` is `<client-id>.<client-secret>`, not separate OAuth credential
+   fields. Validate with authenticated `GET /tama/health`, which accepts any
+   active Agent API credential; writes additionally require same-owner context
+   authorization and structured post validation. Verify
+   verify the imported operation is exactly `memory_post_create`. Make the
+   remember tool wait for an active identity before it can be provisioned.
+4. Set the source slug, operation set, `memory_api_client_id`, and sensitive
+   `memory_api_client_secret` variables without committing secrets. Protect
+   Terraform state and saved plans, which can contain the credential.
 5. Run a Terraform plan and review every create, update, replacement, and
    delete. Pay particular attention to removed disabled handlers.
 6. Apply only with explicit approval.
@@ -630,7 +649,7 @@ snapshot/completion callback pair.
 - [x] Pass focused application tests.
 - [x] Pass Terraform fmt, validate, and test.
 - [x] Pass `mix precommit`.
-- [ ] Review the Terraform plan, including all destroys/replacements.
+- [x] Review the Terraform plan, including all destroys/replacements.
 - [ ] Obtain approval before apply.
 - [ ] Restart Tama and complete live R01-R08 acceptance.
 
@@ -649,7 +668,16 @@ The corpus fixtures are now conventional ExUnit tests using the same Solid
 version and JSON filter behavior as Tama 0.15.0. They run in `mix precommit`
 and CI through the existing `mix test` step.
 
-The current state still owns the obsolete candidate, invalid-candidate, status,
-and retry-save chains/classes. Their removal must remain visible as intentional
-destroy operations in the separately authorized plan review. No plan, apply,
-restart, OpenRouter call, or live R01-R08 trace is claimed here.
+At that 2026-09-22 checkpoint, the state still owned obsolete candidate,
+invalid-candidate, status, and retry-save chains/classes. No plan or live
+runtime acceptance was claimed at that point.
+
+On 2026-09-23, the authenticated, read-only `/tama/health` endpoint and
+Tama-0.15-compatible `bearer_auth` OpenAPI scheme were added. The identity
+binds the two private Agent API token fields into one `api_key`, waits for
+validation, and gates the remember tool and entry nodes. `mix precommit`
+passed 359 tests; Terraform format, validate, and all 8 mock-plan tests passed.
+The running Memovee OpenAPI advertises the new health operation and scheme.
+The read-only Terraform plan reports one identity create and one specification
+update, with no removals or replacements. No apply, Tama restart, OpenRouter
+call, or live R01-R08 trace is claimed.

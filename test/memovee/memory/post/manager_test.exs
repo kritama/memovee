@@ -8,9 +8,6 @@ defmodule Memovee.Memory.Post.ManagerTest do
     owner = user_fixture().actor
     agent = agent_fixture(owner)
     service = agent_fixture(owner)
-    previous = Application.get_env(:memovee, :memory_tama_actor_id)
-    Application.put_env(:memovee, :memory_tama_actor_id, service.id)
-    on_exit(fn -> Application.put_env(:memovee, :memory_tama_actor_id, previous) end)
 
     {:ok, scope} =
       Scope.resolve(service, %{
@@ -98,7 +95,7 @@ defmodule Memovee.Memory.Post.ManagerTest do
     scope: scope,
     owner: owner
   } do
-    assert {:error, :forbidden_context} = Scope.resolve(agent, %{"context" => %{}})
+    assert {:error, :invalid_context} = Scope.resolve(agent, %{"context" => %{}})
     {:ok, _} = Memovee.Accounts.Actor.Manager.transition(owner, owner, :deactivate)
     assert {:error, :forbidden} = Post.Manager.create(scope, candidate())
     assert {:error, :forbidden} = Scope.resolve(agent, %{})
@@ -162,7 +159,7 @@ defmodule Memovee.Memory.Post.ManagerTest do
     assert replay.receipt.replayed
   end
 
-  test "inactive agents, inactive service and unowned agents cannot resolve", %{
+  test "inactive agents, inactive credential holder and unowned agents cannot resolve", %{
     scope: scope,
     owner: owner,
     agent: agent,
@@ -182,8 +179,7 @@ defmodule Memovee.Memory.Post.ManagerTest do
 
   test "structured post updates preserve candidate metadata and the kind tag", %{
     scope: scope,
-    agent: agent,
-    service: service
+    agent: agent
   } do
     {:ok, direct} = Scope.resolve(agent, %{})
     {:ok, result} = Post.Manager.create(scope, candidate())
@@ -203,9 +199,10 @@ defmodule Memovee.Memory.Post.ManagerTest do
              Post.Manager.update(direct, result.post, %{metadata: invalid_references})
 
     other_owner = user_fixture().actor
+    other_agent = agent_fixture(other_owner)
 
     {:ok, other_scope} =
-      Scope.resolve(service, %{
+      Scope.resolve(other_agent, %{
         "context" => %{"actor_id" => other_owner.id, "origin_identifier" => "other:source"}
       })
 
@@ -262,16 +259,16 @@ defmodule Memovee.Memory.Post.ManagerTest do
   end
 
   test "idempotency is owner and origin scoped and provenance stays authorized", %{
-    scope: scope,
-    service: service
+    scope: scope
   } do
     {:ok, first} = Post.Manager.create(scope, candidate())
     {:ok, second} = Post.Manager.create(%{scope | origin_identifier: "another"}, candidate())
     refute first.post.id == second.post.id
     other_owner = user_fixture().actor
+    other_agent = agent_fixture(other_owner)
 
     {:ok, other_scope} =
-      Scope.resolve(service, %{
+      Scope.resolve(other_agent, %{
         "context" => %{
           "actor_id" => other_owner.id,
           "origin_identifier" => scope.origin_identifier
@@ -286,6 +283,29 @@ defmodule Memovee.Memory.Post.ManagerTest do
              Post.Manager.create(%{other_scope | origin_identifier: "new"}, attrs)
 
     assert Repo.aggregate(Post, :count) == 3
+  end
+
+  test "context delegation requires the same active owner", %{service: service, agent: agent} do
+    other_owner = user_fixture().actor
+    other_agent = agent_fixture(other_owner)
+    context = %{"context" => %{"actor_id" => other_agent.id, "origin_identifier" => "other"}}
+
+    assert {:error, :forbidden} = Scope.resolve(service, context)
+
+    assert {:error, :forbidden} =
+             Scope.resolve(other_agent, %{
+               "context" => %{"actor_id" => agent.id, "origin_identifier" => "other"}
+             })
+
+    {:ok, same_owner_scope} =
+      Scope.resolve(service, %{
+        "context" => %{"actor_id" => agent.id, "origin_identifier" => "same-owner"}
+      })
+
+    assert same_owner_scope.structured?
+    assert {:ok, _} = Post.Manager.create(same_owner_scope, candidate())
+    assert {:ok, _} = Eventful.Transit.perform(agent, same_owner_scope.owner, "deactivate")
+    assert {:error, :forbidden} = Post.Manager.create(same_owner_scope, candidate())
   end
 
   test "tagging changes enqueue revisions and unchanged updates do not", %{agent: agent} do

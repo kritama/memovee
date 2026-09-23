@@ -148,7 +148,10 @@ resource "tama_thought_tool" "memory-post-create" {
   thought_id = tama_modular_thought.remember-tooling.id
   action_id  = data.tama_action.memory_api["memory_post_create"].id
 
-  depends_on = [tama_space_bridge.memory-write-to-memory-api]
+  depends_on = [
+    tama_space_bridge.memory-write-to-memory-api,
+    tama_source_identity.memory_api
+  ]
 }
 
 resource "tama_thought_tool_modifier" "memory-post-create-actor" {

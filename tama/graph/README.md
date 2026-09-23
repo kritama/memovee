@@ -81,13 +81,40 @@ The graph follows the feature-oriented file layout in `memovee-tama`:
 - `outputs.tf` exposes the public interfaces; it does not construct the graph.
 
 #11 supplies active root result publishers plus test-gated deterministic component
-producers. #12 implements the real remember chain and enables its production entry
-nodes only when a specification, source slug, and `memory_post_create` operation
-are configured. #13 and #15 still own indexing and recall, so
+producers. #12 implements the real remember chain. Terraform fetches
+`https://app.localhost/tama/openapi` and owns its `tama_specification`, following
+the `memovee-tama` pattern. The specification endpoint is that document URL;
+Tama derives the API source endpoint (`https://app.localhost`) from the
+document's `servers` entry. The specification version tracks Memovee's app
+version in `mix.exs` (`0.1.2`), not the OpenAPI format version. Production
+remember entry nodes require the source slug, `memory_post_create` operation,
+and both service credential fields. #13 and #15 still own indexing and recall, so
 `memory_interfaces.ready` remains false while `remember_ready` reports the narrower
-configuration state. #13 owns the embeddings OpenAPI source. Tama `0.15.0-server`
+configuration state.
+#13 owns the embeddings OpenAPI source. Tama `0.15.0-server`
 contains the required Tooling recovery, result, trusted-modifier, Dispatch, and
 Render runtime baseline.
+
+Memovee's `/tama/memory/posts` accepts an active Agent API token as
+`Authorization: Bearer <client-id>.<client-secret>`; these are not OAuth client
+credentials. The imported OpenAPI describes an `Authorization` header API key
+with Tama's `x-bearer-format: bearer` extension because Tama 0.15.0 does not
+build an outbound header from a standard HTTP-bearer security scheme. The
+`bearer_auth` source identity combines the two values as its `api_key` and
+validates them with authenticated, read-only `GET /tama/health`. That endpoint
+returns 200 for any active Agent with a valid API credential. A memory write
+also requires a valid context Actor under the same active user owner as the
+credential's Agent. The remember tool waits for an active identity
+before it can be provisioned. Supply `memory_api_client_id` and the sensitive
+`memory_api_client_secret` through ignored local tfvars or private Terraform
+environment variables. Never commit the values, and protect Terraform state
+and saved plans because they can contain the secret.
+
+The specification was previously created outside Terraform and is already
+adopted at `module.memory.tama_specification.memory_api` in the existing local
+state; do not import it again. Review the resulting plan for specification and
+protocol changes, including the API version and security-scheme update. A fresh
+environment does not need this adoption step.
 
 For an authorized fixture-only live trace, set
 `TF_VAR_memory_result_fixtures_enabled=true`. This temporarily routes root messages
@@ -188,14 +215,17 @@ and submits it under `post`, with the runtime-owned `context` alongside it.
 }
 ```
 
-The save endpoint accepts only the configured Tama service. Context injection remains
+The save endpoint accepts any active Agent credential for a context Actor under
+the same active user owner. Context injection remains
 at `/body/context/actor_id` and `/body/context/origin_identifier`; generated fields
 are nested under `/body/post`.
 
-Set `MEMOVEE_MEMORY_TAMA_ACTOR_ID` to the dedicated service Actor's UUID and supply
-that Actor's existing API credential to the graph API source. Agents submit memories
-through `remember`; the service supplies `context.actor_id` and
-`context.origin_identifier` on their behalf. Ordinary API credentials cannot save directly.
+Supply an Agent's API credential to the graph API source. Agents submit memories
+through `remember`; Tama supplies `context.actor_id` and
+`context.origin_identifier` on their behalf. The configured source credential
+can write only for Actors with the same user owner. Serving agents owned by
+different users requires credentials scoped to each owner; a single shared
+source identity cannot cross that boundary.
 
 The Post stores the trusted origin identifier. A transaction lock and unique index
 on owner/origin ensure concurrent retries create one Post, its tags, search projection

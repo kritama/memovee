@@ -20,9 +20,10 @@ defmodule MemoveeWeb.Schemas.Tama.ApiSpec do
       components: %Components{
         securitySchemes: %{
           "bearer_auth" => %SecurityScheme{
-            type: "http",
-            scheme: "bearer",
-            bearerFormat: "<client-id>.<client-secret>"
+            type: "apiKey",
+            in: "header",
+            name: "Authorization",
+            extensions: %{"x-bearer-format" => "bearer"}
           }
         }
       },

@@ -35,7 +35,7 @@ defmodule Memovee.Memory.Post.Manager do
   def create(%Scope{} = scope, attrs) do
     Repo.transaction(fn ->
       scope = unwrap(Scope.refresh(scope))
-      origin = if scope.service?, do: scope.origin_identifier
+      origin = if scope.structured?, do: scope.origin_identifier
       lock_origin(scope.owner.id, origin)
 
       case existing_post(scope.owner.id, origin) do
@@ -71,13 +71,13 @@ defmodule Memovee.Memory.Post.Manager do
         created_by_actor_id: scope.actor.id,
         origin_identifier: origin
       }
-      |> Post.changeset(attrs, structured: scope.service?)
+      |> Post.changeset(attrs, structured: scope.structured?)
 
     if not changeset.valid?, do: Repo.rollback(changeset)
 
     metadata = Ecto.Changeset.get_field(changeset, :metadata)
-    tags = unwrap(Tag.prepare(fetch_tags(attrs), metadata, scope.service?))
-    if scope.service?, do: authorize_references!(scope.owner.id, metadata)
+    tags = unwrap(Tag.prepare(fetch_tags(attrs), metadata, scope.structured?))
+    if scope.structured?, do: authorize_references!(scope.owner.id, metadata)
     post = changeset |> Repo.insert() |> unwrap()
 
     Enum.each(tags, &attach_tag(post, &1))

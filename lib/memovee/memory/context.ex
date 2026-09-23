@@ -1,5 +1,5 @@
 defmodule Memovee.Memory.Context do
-  @moduledoc "Validated identity and source context supplied by the trusted Tama service."
+  @moduledoc "Validated memory context supplied by an authenticated same-owner Agent."
   use Memovee.Schema
 
   @primary_key false

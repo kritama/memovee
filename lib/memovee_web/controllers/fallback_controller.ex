@@ -10,10 +10,6 @@ defmodule MemoveeWeb.FallbackController do
   def call(conn, {:error, {:memory, reason}}) do
     {status, code, message} =
       case reason do
-        :forbidden_context ->
-          {:forbidden, "forbidden_context",
-           "Only the configured Tama service may assert context."}
-
         :forbidden ->
           {:forbidden, "forbidden", "Memory access is forbidden."}
 

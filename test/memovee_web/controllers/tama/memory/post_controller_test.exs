@@ -14,12 +14,9 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
     service = agent_fixture(owner)
     credential = api_token_fixture(owner, service)
     ordinary = api_token_fixture(owner, agent)
-    previous = Application.get_env(:memovee, :memory_tama_actor_id)
-    Application.put_env(:memovee, :memory_tama_actor_id, service.id)
-    on_exit(fn -> Application.put_env(:memovee, :memory_tama_actor_id, previous) end)
     context = %{"actor_id" => agent.id, "origin_identifier" => "mcp-app:message:v1:test"}
 
-    %{credential: credential, ordinary: ordinary, context: context}
+    %{credential: credential, ordinary: ordinary, context: context, service: service}
   end
 
   test "creates a canonical memory post", %{conn: conn, credential: credential, context: context} do
@@ -145,9 +142,10 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
     assert spec["security"] == [%{"bearer_auth" => []}]
 
     assert spec["components"]["securitySchemes"]["bearer_auth"] == %{
-             "type" => "http",
-             "scheme" => "bearer",
-             "bearerFormat" => "<client-id>.<client-secret>"
+             "type" => "apiKey",
+             "in" => "header",
+             "name" => "Authorization",
+             "x-bearer-format" => "bearer"
            }
   end
 
@@ -232,10 +230,10 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
            ] == 512
   end
 
-  test "ordinary agents cannot bypass remember", %{ordinary: ordinary} do
-    assert %{"error" => %{"code" => "forbidden"}} =
+  test "ingestion requires structured context", %{ordinary: ordinary} do
+    assert %{"error" => %{"code" => "invalid_request"}} =
              request(ordinary, "/tama/memory/posts", %{post: %{body: "Use Req."}})
-             |> json_response(403)
+             |> json_response(422)
   end
 
   test "rejects NUL in origin identifiers before database access", %{
@@ -280,9 +278,29 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
     end
   end
 
-  test "ordinary context assertions are rejected before validation", %{ordinary: ordinary} do
-    assert %{"error" => %{"code" => "forbidden_context"}} =
-             request(ordinary, "/tama/memory/posts", %{context: nil}) |> json_response(403)
+  test "any same-owner Agent credential may assert valid context", %{
+    ordinary: ordinary,
+    context: context
+  } do
+    assert request(ordinary, "/tama/memory/posts", %{context: context, post: memory_post()}).status ==
+             201
+
+    assert %{"error" => %{"code" => "invalid_request"}} =
+             request(ordinary, "/tama/memory/posts", %{context: nil}) |> json_response(422)
+  end
+
+  test "cross-owner context is forbidden", %{credential: credential, context: context} do
+    other_owner = user_fixture().actor
+    other_agent = agent_fixture(other_owner)
+
+    conn =
+      request(credential, "/tama/memory/posts", %{
+        context: Map.put(context, "actor_id", other_agent.id),
+        post: memory_post()
+      })
+
+    assert %{"error" => %{"code" => "forbidden"}} = json_response(conn, 403)
+    assert Repo.aggregate(Post, :count) == 0
   end
 
   test "the OpenAPI exposes only the save operation", %{
@@ -425,14 +443,12 @@ defmodule MemoveeWeb.Tama.Memory.PostControllerTest do
 
   test "replays retain a valid receipt when current indexing invalidation is rejected", %{
     credential: credential,
-    context: context
+    context: context,
+    service: service
   } do
     attrs = %{context: context, post: memory_post()}
     assert request(credential, "/tama/memory/posts", attrs).status == 201
     projection = Repo.one!(Memovee.Projections.Indexing)
-
-    service =
-      Repo.get!(Memovee.Accounts.Actor, Application.fetch_env!(:memovee, :memory_tama_actor_id))
 
     assert {:error, %Eventful.Error{code: :revision, message: :current_revision}} =
              Eventful.Transit.perform(projection, service, "invalidate", [])

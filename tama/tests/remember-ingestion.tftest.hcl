@@ -1,5 +1,34 @@
 # Mock-provider plans are static evidence only. No remote resources or secrets.
 mock_provider "tama" {}
+mock_provider "http" {
+  mock_data "http" {
+    defaults = {
+      response_body = jsonencode({
+        openapi = "3.0.0"
+        info    = { title = "Memovee Tama API", version = "0.1.2" }
+        servers = [{ url = "https://app.localhost" }]
+        components = {
+          securitySchemes = {
+            bearer_auth = {
+              type            = "apiKey"
+              in              = "header"
+              name            = "Authorization"
+              x-bearer-format = "bearer"
+            }
+          }
+        }
+        paths = {
+          "/tama/health" = {
+            get = { operationId = "tama_health_show" }
+          }
+          "/tama/memory/posts" = {
+            post = { operationId = "memory_post_create" }
+          }
+        }
+      })
+    }
+  }
+}
 
 run "remember_ingestion_topology" {
   command = plan
@@ -14,12 +43,39 @@ run "remember_ingestion_topology" {
       forwarding = "fixture-forwarding"
       tool-call  = "fixture-tool-call"
     }
-    context_metadata_corpus_id  = "fixture-context"
-    action_call_json_corpus_id  = "fixture-action"
-    openrouter_api_key          = "fixture-only-never-a-real-credential"
-    memory_api_specification_id = "fixture-specification"
-    memory_api_source_slug      = "fixture-source"
-    memory_api_operations       = ["memory_post_create"]
+    context_metadata_corpus_id = "fixture-context"
+    action_call_json_corpus_id = "fixture-action"
+    openrouter_api_key         = "fixture-only-never-a-real-credential"
+    memory_api_openapi_url     = "https://app.localhost/tama/openapi"
+    memory_api_source_slug     = "fixture-source"
+    memory_api_operations      = ["memory_post_create"]
+    memory_api_client_id       = "01990000-0000-7000-8000-000000000001"
+    memory_api_client_secret   = "fixture-only-never-a-real-credential"
+  }
+
+  assert {
+    condition = alltrue([
+      data.http.memory_api.url == "https://app.localhost/tama/openapi",
+      tama_specification.memory_api.endpoint == "https://app.localhost/tama/openapi",
+      tama_specification.memory_api.version == "0.1.2",
+      jsondecode(tama_specification.memory_api.schema).paths["/tama/memory/posts"].post.operationId == "memory_post_create",
+      jsondecode(tama_specification.memory_api.schema).components.securitySchemes.bearer_auth.type == "apiKey",
+      jsondecode(tama_specification.memory_api.schema).components.securitySchemes.bearer_auth["x-bearer-format"] == "bearer"
+    ])
+    error_message = "Remember must register the compatible Memovee OpenAPI document."
+  }
+
+  assert {
+    condition = alltrue([
+      length(tama_source_identity.memory_api) == 1,
+      tama_source_identity.memory_api[0].identifier == "bearer_auth",
+      tama_source_identity.memory_api[0].validation.path == "/tama/health",
+      tama_source_identity.memory_api[0].validation.method == "GET",
+      toset(tama_source_identity.memory_api[0].validation.codes) == toset([200]),
+      tama_source_identity.memory_api[0].wait_for[0].field[0].name == "current_state",
+      toset(tama_source_identity.memory_api[0].wait_for[0].field[0].in) == toset(["active"])
+    ])
+    error_message = "Remember must wait for its bearer_auth service identity to become active."
   }
 
   assert {
@@ -27,7 +83,7 @@ run "remember_ingestion_topology" {
       length(tama_node.remember-forward) == 1,
       length(tama_node.memory-write) == 1
     ])
-    error_message = "Configured remember ingestion must enable both root and component entry nodes."
+    error_message = "Remember must enable both entry nodes when its API identity is configured."
   }
 
   assert {
@@ -178,5 +234,39 @@ run "remember_ingestion_requires_api_binding" {
       length(tama_thought_tool.memory-post-create) == 0
     ])
     error_message = "Production remember ingress must stay disabled until memory_post_create is configured."
+  }
+}
+
+run "remember_ingestion_requires_source_identity" {
+  command = plan
+
+  module {
+    source = "./graph"
+  }
+
+  variables {
+    global_space_id = "fixture-global"
+    global_schemas = {
+      forwarding = "fixture-forwarding"
+      tool-call  = "fixture-tool-call"
+    }
+    context_metadata_corpus_id = "fixture-context"
+    action_call_json_corpus_id = "fixture-action"
+    openrouter_api_key         = "fixture-only-never-a-real-credential"
+    memory_api_source_slug     = "fixture-source"
+    memory_api_operations      = ["memory_post_create"]
+    # Explicitly override local .auto.tfvars for the incomplete-credential case.
+    memory_api_client_id     = "01990000-0000-7000-8000-000000000001"
+    memory_api_client_secret = null
+  }
+
+  assert {
+    condition = alltrue([
+      length(tama_source_identity.memory_api) == 0,
+      length(tama_node.remember-forward) == 0,
+      length(tama_node.memory-write) == 0,
+      output.interfaces.remember_ready == false
+    ])
+    error_message = "Remember ingress must stay disabled until both service credential fields are configured."
   }
 }

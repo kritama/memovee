@@ -58,6 +58,8 @@ defmodule MemoveeWeb.Router do
   scope "/tama", MemoveeWeb.Tama do
     pipe_through [:tama_api, :authenticated_api]
 
+    get "/health", HealthController, :show
+
     scope "/memory", Memory do
       resources "/posts", PostController, only: [:create]
     end
